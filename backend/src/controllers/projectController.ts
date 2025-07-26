@@ -49,7 +49,14 @@ export const getProjects = async (req: Request, res: Response) => {
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+          priority: true,
           members: {
             include: {
               user: {
