@@ -320,8 +320,21 @@ const Project: React.FC = () => {
   };
   const handleOk = async () => {
     try {
+      console.log('Starting form submission...');
+      
+      // Kiểm tra authentication trước khi submit
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token available for form submission');
+        message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        window.location.href = '/login';
+        return;
+      }
+      
       // Thêm giá trị mặc định cho form trước khi validate
       const currentValues = form.getFieldsValue();
+      console.log('Current form values:', currentValues);
+      
       form.setFieldsValue({
         name: currentValues.name || '',
         description: currentValues.description || '',
@@ -369,6 +382,16 @@ const Project: React.FC = () => {
     } catch (e: any) {
       console.error('LỖI SUBMIT FORM:', e);
       console.error('Error details:', e.response?.data || e);
+      
+      // Kiểm tra lỗi authentication
+      if (e.response?.status === 401) {
+        console.log('401 error in form submission - redirecting to login');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        message.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        window.location.href = '/login';
+        return;
+      }
       
       // Log chi tiết hơn về lỗi
       if (e.errorFields) {

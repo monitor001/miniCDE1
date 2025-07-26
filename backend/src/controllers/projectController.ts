@@ -210,10 +210,17 @@ export const createProject = async (req: Request, res: Response) => {
         endDate: endDate ? new Date(endDate) : null,
         priority: priority || null,
         members: {
-          create: {
-            userId: req.user?.id as string,
-            role: (req.user?.role || 'PROJECT_MANAGER') as any
-          }
+          create: [
+            {
+              userId: req.user?.id as string,
+              role: (req.user?.role || 'PROJECT_MANAGER') as any
+            },
+            // Add other members if provided
+            ...(memberIds && Array.isArray(memberIds) ? memberIds.map((memberId: string) => ({
+              userId: memberId,
+              role: 'MEMBER' as any
+            })) : [])
+          ]
         }
       },
       include: {
