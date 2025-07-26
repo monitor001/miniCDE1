@@ -1,18 +1,28 @@
 import { Router } from 'express';
-import { getTasks, getTask, createTask, updateTask, deleteTask, addComment, addHistory } from '../controllers/taskController';
-import { authMiddleware, authorize } from '../middlewares/auth';
+import { 
+  getTasks, 
+  getTask, 
+  createTask, 
+  updateTask, 
+  deleteTask, 
+  addComment, 
+  getTaskHistory 
+} from '../controllers/taskController';
+import { authMiddleware } from '../middlewares/auth';
 
 const router = Router();
 
 router.use(authMiddleware);
 
+// Task CRUD operations
 router.get('/', getTasks);
 router.get('/:id', getTask);
-router.post('/', authorize(['ADMIN', 'MANAGER']), createTask);
-router.put('/:id', authorize(['ADMIN', 'MANAGER']), updateTask);
-router.delete('/:id', authorize(['ADMIN']), deleteTask);
+router.post('/', createTask);
+router.put('/:id', updateTask);
+router.delete('/:id', deleteTask);
 
-router.post('/:id/comment', addComment);
-router.post('/:id/history', addHistory);
+// Task comments and history
+router.post('/:id/comments', addComment);
+router.get('/:id/history', getTaskHistory);
 
 export default router; 

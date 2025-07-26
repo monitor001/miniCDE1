@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { ApiError } from '../middlewares/errorHandler';
 import { ProjectMemberWithUser, Member } from '../types/global';
 
@@ -57,6 +57,8 @@ export const getProjects = async (req: Request, res: Response) => {
           startDate: true,
           endDate: true,
           priority: true,
+          createdAt: true,
+          updatedAt: true,
           members: {
             include: {
               user: {
@@ -186,7 +188,19 @@ export const getProjectById = async (req: Request, res: Response) => {
  */
 export const createProject = async (req: Request, res: Response) => {
   try {
+    console.log('=== CREATE PROJECT REQUEST ===');
+    console.log('Full request body:', JSON.stringify(req.body, null, 2));
+    
     const { name, description, status, startDate, endDate, priority, memberIds } = req.body;
+    
+    console.log('Extracted values:');
+    console.log('- name:', name, 'type:', typeof name);
+    console.log('- description:', description, 'type:', typeof description);
+    console.log('- status:', status, 'type:', typeof status);
+    console.log('- startDate:', startDate, 'type:', typeof startDate);
+    console.log('- endDate:', endDate, 'type:', typeof endDate);
+    console.log('- priority:', priority, 'type:', typeof priority);
+    console.log('- memberIds:', memberIds, 'type:', typeof memberIds);
     
     // Validate input
     if (!name || !status) {
@@ -220,12 +234,12 @@ export const createProject = async (req: Request, res: Response) => {
           create: [
             {
               userId: req.user?.id as string,
-              role: (req.user?.role || 'PROJECT_MANAGER') as any
+              role: Role.PROJECT_MANAGER
             },
             // Add other members if provided
             ...(memberIds && Array.isArray(memberIds) ? memberIds.map((memberId: string) => ({
               userId: memberId,
-              role: 'MEMBER' as any
+              role: Role.CONTRIBUTOR
             })) : [])
           ]
         }
@@ -788,7 +802,7 @@ export const getProjectNotes = async (req: Request, res: Response) => {
     
     // Check if user has access to this project
     if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member) => 
+      const isMember = project.members.some((member: any) => 
         member.userId === req.user?.id
       );
       if (!isMember) {
@@ -870,7 +884,7 @@ export const createProjectNote = async (req: Request, res: Response) => {
     
     // Check if user has access to this project
     if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member) => 
+      const isMember = project.members.some((member: any) => 
         member.userId === req.user?.id
       );
       if (!isMember) {
@@ -977,7 +991,7 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
     // Check if user has permission (admin, project manager, or note creator)
     const hasPermission = 
       req.user?.role === 'ADMIN' ||
-      project.members.some((member) => 
+      project.members.some((member: any) => 
         member.userId === req.user?.id && 
         ['PROJECT_MANAGER', 'BIM_MANAGER'].includes(member.role)
       ) ||
@@ -1030,7 +1044,7 @@ export const getProjectImages = async (req: Request, res: Response) => {
     
     // Check if user has access to this project
     if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member) => 
+      const isMember = project.members.some((member: any) => 
         member.userId === req.user?.id
       );
       if (!isMember) {
@@ -1082,7 +1096,7 @@ export const uploadProjectImages = async (req: Request, res: Response) => {
     
     // Check if user has access to this project
     if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member) => 
+      const isMember = project.members.some((member: any) => 
         member.userId === req.user?.id
       );
       if (!isMember) {
@@ -1140,7 +1154,7 @@ export const deleteProjectImage = async (req: Request, res: Response) => {
     
     // Check if user has access to this project
     if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member) => 
+      const isMember = project.members.some((member: any) => 
         member.userId === req.user?.id
       );
       if (!isMember) {

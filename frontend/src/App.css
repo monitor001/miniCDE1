@@ -36,3 +36,12 @@
     transform: rotate(360deg);
   }
 }
+
+.project-card-highlight {
+  transition: transform 0.2s cubic-bezier(.4,2,.6,1), box-shadow 0.2s;
+}
+.project-card-highlight:hover {
+  transform: scale(1.035);
+  box-shadow: 0 8px 32px 0 rgba(24, 144, 255, 0.18), 0 3px 12px 0 rgba(0,0,0,0.10);
+  background: #e6f7ff;
+}

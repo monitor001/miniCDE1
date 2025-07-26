@@ -1,483 +1,401 @@
 import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useSelector } from 'react-redux';
-import { Row, Col, Card, Statistic, List, Typography, Tag, Timeline, Progress, Spin } from 'antd';
-import {
-  ProjectOutlined,
-  FileOutlined,
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Statistic, 
+  Table, 
+  Tag, 
+  Button, 
+  Space, 
+  Typography, 
+  Progress,
+  List,
+  Avatar,
+  Badge,
+  Calendar,
+  Tooltip
+} from 'antd';
+import { 
+  UserOutlined, 
+  ProjectOutlined, 
+  FileTextOutlined, 
   CheckCircleOutlined,
   ClockCircleOutlined,
-  UserOutlined,
-  TeamOutlined,
-  FileTextOutlined,
-  FileDoneOutlined,
-  WarningOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  CalendarOutlined,
+  ArrowRightOutlined
 } from '@ant-design/icons';
-import { useQuery } from 'react-query';
-
-import { RootState } from '../store';
 import axiosInstance from '../axiosConfig';
+import moment from 'moment';
+import dayjs, { Dayjs } from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
-// Types
-interface Project {
-  id: string;
-  name: string;
-  status: string;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate: string;
-  project: {
-    id: string;
-    name: string;
-  };
-}
-
-interface Document {
-  id: string;
-  name: string;
-  status: string;
-  uploadDate: string;
-  uploader: {
-    name: string;
-  };
-}
-
-interface Activity {
-  id: string;
-  type: string;
-  action: string;
-  user: string;
-  target: string;
-  time: string;
-}
-
 const Dashboard: React.FC = () => {
-  const { t } = useTranslation();
-  const { user } = useSelector((state: RootState) => state.auth);
-  
-  // Fetch dashboard data
-  const { data: dashboardData, isLoading } = useQuery('dashboardData', async () => {
+  const [stats, setStats] = useState<any>({});
+  const [recentTasks, setRecentTasks] = useState<any[]>([]);
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      const response = await axiosInstance.get('/dashboard');
-      return response.data;
+      // Fetch tasks for current user
+      const tasksRes = await axiosInstance.get('/tasks?limit=10');
+      const allTasks = tasksRes.data.tasks || tasksRes.data;
+      
+      // Get current user's tasks
+      const currentUserTasks = allTasks.filter((task: any) => 
+        task.assigneeId === localStorage.getItem('userId') || 
+        task.assignee?.id === localStorage.getItem('userId')
+      );
+      
+      setMyTasks(currentUserTasks.slice(0, 5));
+      setRecentTasks(allTasks.slice(0, 5));
+
+      // Calculate statistics
+      const taskStats = {
+        total: allTasks.length,
+        todo: allTasks.filter((t: any) => t.status === 'TODO').length,
+        inProgress: allTasks.filter((t: any) => t.status === 'IN_PROGRESS').length,
+        review: allTasks.filter((t: any) => t.status === 'REVIEW').length,
+        completed: allTasks.filter((t: any) => t.status === 'COMPLETED').length,
+        overdue: allTasks.filter((t: any) => 
+          t.dueDate && moment(t.dueDate).isBefore(moment(), 'day')
+        ).length,
+        myTasks: currentUserTasks.length,
+        myCompleted: currentUserTasks.filter((t: any) => t.status === 'COMPLETED').length
+      };
+
+      setStats(taskStats);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      return null;
     }
-  });
-  
-  // Mock data for development
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  
+    setLoading(false);
+  };
+
   useEffect(() => {
-    // If API returns data, use it, otherwise use mock data
-    if (dashboardData) {
-      setProjects(dashboardData.projects);
-      setTasks(dashboardData.tasks);
-      setDocuments(dashboardData.documents);
-      setActivities(dashboardData.activities);
-    } else {
-      // Mock data
-      setProjects([
-        { id: '1', name: 'Office Building Project', status: 'ACTIVE' },
-        { id: '2', name: 'Residential Complex', status: 'PLANNING' }
-      ]);
-      
-      setTasks([
-        {
-          id: '1',
-          title: 'Review architectural plans',
-          status: 'IN_PROGRESS',
-          priority: 'HIGH',
-          dueDate: '2024-03-15',
-          project: { id: '1', name: 'Office Building Project' }
-        },
-        {
-          id: '2',
-          title: 'Update structural analysis',
-          status: 'TODO',
-          priority: 'MEDIUM',
-          dueDate: '2024-03-20',
-          project: { id: '1', name: 'Office Building Project' }
-        },
-        {
-          id: '3',
-          title: 'Coordinate MEP systems',
-          status: 'COMPLETED',
-          priority: 'URGENT',
-          dueDate: '2024-03-10',
-          project: { id: '1', name: 'Office Building Project' }
-        }
-      ]);
-      
-      setDocuments([
-        {
-          id: '1',
-          name: 'Architectural Plans',
-          status: 'WORK_IN_PROGRESS',
-          uploadDate: '2024-03-01',
-          uploader: { name: 'John Architect' }
-        },
-        {
-          id: '2',
-          name: 'Structural Analysis',
-          status: 'SHARED',
-          uploadDate: '2024-03-05',
-          uploader: { name: 'Sarah Engineer' }
-        },
-        {
-          id: '3',
-          name: 'MEP Coordination',
-          status: 'PUBLISHED',
-          uploadDate: '2024-03-08',
-          uploader: { name: 'MEP Team' }
-        }
-      ]);
-      
-      setActivities([
-        {
-          id: '1',
-          type: 'document',
-          action: 'uploaded',
-          user: 'John Architect',
-          target: 'Architectural Plans',
-          time: '10 minutes ago'
-        },
-        {
-          id: '2',
-          type: 'task',
-          action: 'completed',
-          user: 'MEP Team',
-          target: 'Coordinate MEP systems',
-          time: '2 hours ago'
-        },
-        {
-          id: '3',
-          type: 'project',
-          action: 'created',
-          user: 'Project Manager',
-          target: 'Residential Complex',
-          time: '1 day ago'
-        }
-      ]);
+    fetchDashboardData();
+  }, []);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'TODO': return 'default';
+      case 'IN_PROGRESS': return 'processing';
+      case 'REVIEW': return 'warning';
+      case 'COMPLETED': return 'success';
+      default: return 'default';
     }
-  }, [dashboardData]);
-  
-  // Get task status counts
-  const taskStatusCounts = {
-    todo: tasks.filter(task => task.status === 'TODO').length,
-    inProgress: tasks.filter(task => task.status === 'IN_PROGRESS').length,
-    review: tasks.filter(task => task.status === 'REVIEW').length,
-    completed: tasks.filter(task => task.status === 'COMPLETED').length
   };
-  
-  // Get document status counts
-  const documentStatusCounts = {
-    workInProgress: documents.filter(doc => doc.status === 'WORK_IN_PROGRESS').length,
-    shared: documents.filter(doc => doc.status === 'SHARED').length,
-    published: documents.filter(doc => doc.status === 'PUBLISHED').length,
-    archived: documents.filter(doc => doc.status === 'ARCHIVED').length
-  };
-  
-  // Get task priority tag color
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'LOW':
-        return 'green';
-      case 'MEDIUM':
-        return 'blue';
-      case 'HIGH':
-        return 'orange';
-      case 'URGENT':
-        return 'red';
-      default:
-        return 'default';
+      case 'LOW': return 'blue';
+      case 'MEDIUM': return 'orange';
+      case 'HIGH': return 'red';
+      case 'URGENT': return 'red';
+      default: return 'blue';
     }
   };
-  
-  // Get document status tag color
-  const getDocumentStatusColor = (status: string) => {
+
+  const getStatusText = (status: string) => {
     switch (status) {
-      case 'WORK_IN_PROGRESS':
-        return 'blue';
-      case 'SHARED':
-        return 'orange';
-      case 'PUBLISHED':
-        return 'green';
-      case 'ARCHIVED':
-        return 'default';
-      default:
-        return 'default';
+      case 'TODO': return 'Chờ thực hiện';
+      case 'IN_PROGRESS': return 'Đang thực hiện';
+      case 'REVIEW': return 'Đang xem xét';
+      case 'COMPLETED': return 'Hoàn thành';
+      default: return status;
     }
   };
-  
-  // Get activity icon
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'document':
-        return <FileTextOutlined style={{ color: '#1890ff' }} />;
-      case 'task':
-        return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
-      case 'project':
-        return <ProjectOutlined style={{ color: '#722ed1' }} />;
-      default:
-        return <ClockCircleOutlined />;
+
+  const getPriorityText = (priority: string) => {
+    switch (priority) {
+      case 'LOW': return 'Thấp';
+      case 'MEDIUM': return 'Trung bình';
+      case 'HIGH': return 'Cao';
+      case 'URGENT': return 'Khẩn cấp';
+      default: return priority;
     }
   };
-  
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <Spin size="large" />
-      </div>
+
+  const taskColumns = [
+    {
+      title: 'Tên công việc',
+      dataIndex: 'title',
+      key: 'title',
+      render: (text: string, record: any) => (
+        <div>
+          <div style={{ fontWeight: 'bold', cursor: 'pointer' }} 
+               onClick={() => navigate(`/tasks/${record.id}`)}>
+            {text}
+          </div>
+          {record.description && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {record.description.length > 50 
+                ? `${record.description.substring(0, 50)}...` 
+                : record.description}
+            </Text>
+          )}
+        </div>
+      )
+    },
+    {
+      title: 'Dự án',
+      dataIndex: ['project', 'name'],
+      key: 'project',
+      render: (text: string) => <Tag color="blue">{text}</Tag>
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Badge 
+          status={getStatusColor(status) as any} 
+          text={getStatusText(status)}
+        />
+      )
+    },
+    {
+      title: 'Độ ưu tiên',
+      dataIndex: 'priority',
+      key: 'priority',
+      render: (priority: string) => (
+        <Tag color={getPriorityColor(priority)}>
+          {getPriorityText(priority)}
+        </Tag>
+      )
+    },
+    {
+      title: 'Hạn hoàn thành',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      render: (date: string) => (
+        date ? (
+          <Space>
+            <CalendarOutlined />
+            <span style={{ 
+              color: moment(date).isBefore(moment(), 'day') ? '#ff4d4f' : 'inherit' 
+            }}>
+              {moment(date).format('DD/MM/YYYY')}
+            </span>
+          </Space>
+        ) : (
+          <Text type="secondary">Không có hạn</Text>
+        )
+      )
+    }
+  ];
+
+  const getCalendarData = (value: Dayjs) => {
+    const date = value.format('YYYY-MM-DD');
+    const dayTasks = myTasks.filter((task: any) => 
+      task.dueDate && moment(task.dueDate).format('YYYY-MM-DD') === date
     );
-  }
+    
+    return dayTasks.map((task: any) => ({
+      type: 'success',
+      content: task.title,
+      task
+    }));
+  };
+
+  const dateCellRender = (value: Dayjs) => {
+    const data = getCalendarData(value);
+    return (
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {data.map((item, index) => (
+          <li key={index} style={{ marginBottom: 3 }}>
+            <Tooltip title={`${item.task.title} - ${getStatusText(item.task.status)}`}>
+              <div
+                style={{
+                  fontSize: '10px',
+                  padding: '1px 3px',
+                  borderRadius: '2px',
+                  backgroundColor: getStatusColor(item.task.status) === 'success' ? '#52c41a' : 
+                                   getStatusColor(item.task.status) === 'processing' ? '#1890ff' :
+                                   getStatusColor(item.task.status) === 'warning' ? '#faad14' : '#d9d9d9',
+                  color: 'white',
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+                onClick={() => navigate(`/tasks/${item.task.id}`)}
+              >
+                {item.content}
+              </div>
+            </Tooltip>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  const completionRate = stats.myTasks > 0 ? (stats.myCompleted / stats.myTasks) * 100 : 0;
 
   return (
-    <div>
-      <Title level={2}>{t('dashboard.welcome')}, {user?.name}!</Title>
+    <div style={{ padding: '24px' }}>
+      <Title level={2}>Dashboard</Title>
       
-      {/* Stats Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      {/* Statistics Cards */}
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title={t('navigation.projects')}
-              value={projects.length}
-              prefix={<ProjectOutlined />}
+              title="Tổng công việc"
+              value={stats.total}
+              prefix={<FileTextOutlined />}
+              valueStyle={{ color: '#1890ff' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title={t('navigation.documents')}
-              value={documents.length}
-              prefix={<FileOutlined />}
+              title="Công việc của tôi"
+              value={stats.myTasks}
+              prefix={<UserOutlined />}
+              valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title={t('navigation.tasks')}
-              value={tasks.length}
-              prefix={<CheckCircleOutlined />}
+              title="Đang thực hiện"
+              value={stats.inProgress}
+              prefix={<ExclamationCircleOutlined />}
+              valueStyle={{ color: '#faad14' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title={t('navigation.users')}
-              value={5} // Mock value
-              prefix={<TeamOutlined />}
+              title="Quá hạn"
+              value={stats.overdue}
+              prefix={<ClockCircleOutlined />}
+              valueStyle={{ color: '#ff4d4f' }}
             />
           </Card>
         </Col>
       </Row>
-      
-      {/* Tasks and Documents */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {/* Upcoming Tasks */}
-        <Col xs={24} lg={12}>
-          <Card title={t('dashboard.upcomingTasks')} style={{ height: '100%' }}>
-            <List
-              dataSource={tasks.filter(task => task.status !== 'COMPLETED').slice(0, 5)}
-              renderItem={task => (
-                <List.Item
-                  actions={[
-                    <Tag color={getPriorityColor(task.priority)}>
-                      {t(`tasks.priority.${task.priority.toLowerCase()}`)}
-                    </Tag>
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={<a href={`/tasks/${task.id}`}>{task.title}</a>}
-                    description={
-                      <>
-                        <Text type="secondary">{task.project.name}</Text>
-                        <br />
-                        <Text type="secondary">
-                          <ClockCircleOutlined /> {new Date(task.dueDate).toLocaleDateString()}
-                        </Text>
-                      </>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-        
-        {/* Recent Documents */}
-        <Col xs={24} lg={12}>
-          <Card title={t('navigation.documents')} style={{ height: '100%' }}>
-            <List
-              dataSource={documents.slice(0, 5)}
-              renderItem={doc => (
-                <List.Item
-                  actions={[
-                    <Tag color={getDocumentStatusColor(doc.status)}>
-                      {t(`documents.status.${doc.status.toLowerCase()}`)}
-                    </Tag>
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={<a href={`/documents/${doc.id}`}>{doc.name}</a>}
-                    description={
-                      <>
-                        <Text type="secondary">
-                          <UserOutlined /> {doc.uploader.name}
-                        </Text>
-                        <br />
-                        <Text type="secondary">
-                          <ClockCircleOutlined /> {new Date(doc.uploadDate).toLocaleDateString()}
-                        </Text>
-                      </>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-      </Row>
-      
-      {/* Status Charts and Activity */}
+
       <Row gutter={[16, 16]}>
-        {/* Task Status */}
-        <Col xs={24} md={8}>
-          <Card title={t('dashboard.taskStatus')} style={{ height: '100%' }}>
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('tasks.status.todo')}</Text>
-              <Progress 
-                percent={Math.round((taskStatusCounts.todo / tasks.length) * 100)} 
-                strokeColor="#1890ff" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="blue">{taskStatusCounts.todo}</Tag>
+        {/* My Tasks Progress */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title="Tiến độ công việc của tôi" 
+            extra={
+              <Button type="link" onClick={() => navigate('/tasks')}>
+                Xem tất cả <ArrowRightOutlined />
+              </Button>
+            }
+          >
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <Text>Hoàn thành</Text>
+                <Text>{Math.round(completionRate)}%</Text>
               </div>
+              <Progress 
+                percent={completionRate} 
+                status={completionRate === 100 ? 'success' : 'active'}
+                strokeColor={{
+                  '0%': '#108ee9',
+                  '100%': '#87d068',
+                }}
+              />
             </div>
             
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('tasks.status.inProgress')}</Text>
-              <Progress 
-                percent={Math.round((taskStatusCounts.inProgress / tasks.length) * 100)} 
-                strokeColor="#faad14" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="orange">{taskStatusCounts.inProgress}</Tag>
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('tasks.status.review')}</Text>
-              <Progress 
-                percent={Math.round((taskStatusCounts.review / tasks.length) * 100)} 
-                strokeColor="#722ed1" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="purple">{taskStatusCounts.review}</Tag>
-              </div>
-            </div>
-            
-            <div>
-              <Text>{t('tasks.status.completed')}</Text>
-              <Progress 
-                percent={Math.round((taskStatusCounts.completed / tasks.length) * 100)} 
-                strokeColor="#52c41a" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="green">{taskStatusCounts.completed}</Tag>
-              </div>
-            </div>
+            <Table
+              columns={taskColumns}
+              dataSource={myTasks}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              locale={{
+                emptyText: 'Không có công việc nào được phân công'
+              }}
+            />
           </Card>
         </Col>
-        
-        {/* Document Status */}
-        <Col xs={24} md={8}>
-          <Card title={t('dashboard.documentStatus')} style={{ height: '100%' }}>
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('documents.status.workInProgress')}</Text>
-              <Progress 
-                percent={Math.round((documentStatusCounts.workInProgress / documents.length) * 100)} 
-                strokeColor="#1890ff" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="blue">{documentStatusCounts.workInProgress}</Tag>
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('documents.status.shared')}</Text>
-              <Progress 
-                percent={Math.round((documentStatusCounts.shared / documents.length) * 100)} 
-                strokeColor="#faad14" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="orange">{documentStatusCounts.shared}</Tag>
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: 16 }}>
-              <Text>{t('documents.status.published')}</Text>
-              <Progress 
-                percent={Math.round((documentStatusCounts.published / documents.length) * 100)} 
-                strokeColor="#52c41a" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag color="green">{documentStatusCounts.published}</Tag>
-              </div>
-            </div>
-            
-            <div>
-              <Text>{t('documents.status.archived')}</Text>
-              <Progress 
-                percent={Math.round((documentStatusCounts.archived / documents.length) * 100)} 
-                strokeColor="#d9d9d9" 
-                showInfo={false} 
-              />
-              <div style={{ textAlign: 'right' }}>
-                <Tag>{documentStatusCounts.archived}</Tag>
-              </div>
-            </div>
+
+        {/* Recent Tasks */}
+        <Col xs={24} lg={12}>
+          <Card 
+            title="Công việc gần đây" 
+            extra={
+              <Button type="link" onClick={() => navigate('/tasks')}>
+                Xem tất cả <ArrowRightOutlined />
+              </Button>
+            }
+          >
+            <Table
+              columns={taskColumns}
+              dataSource={recentTasks}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              locale={{
+                emptyText: 'Không có công việc nào'
+              }}
+            />
           </Card>
         </Col>
-        
-        {/* Recent Activity */}
-        <Col xs={24} md={8}>
-          <Card title={t('dashboard.recentActivity')} style={{ height: '100%' }}>
-            <Timeline
-              items={activities.map(activity => ({
-                color: activity.type === 'document' ? 'blue' : activity.type === 'task' ? 'green' : 'purple',
-                dot: getActivityIcon(activity.type),
-                children: (
-                  <div>
-                    <Text strong>{activity.user}</Text> {activity.action} <Text strong>{activity.target}</Text>
-                    <br />
-                    <Text type="secondary">{activity.time}</Text>
-                  </div>
-                )
-              }))}
+      </Row>
+
+      {/* Calendar */}
+      <Row style={{ marginTop: '24px' }}>
+        <Col span={24}>
+          <Card title="Lịch công việc">
+            <Calendar 
+              dateCellRender={dateCellRender}
+              style={{ backgroundColor: 'white' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Task Status Overview */}
+      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Chờ thực hiện"
+              value={stats.todo}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Đang xem xét"
+              value={stats.review}
+              valueStyle={{ color: '#fa8c16' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Hoàn thành"
+              value={stats.completed}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Tỷ lệ hoàn thành"
+              value={stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}
+              suffix="%"
+              valueStyle={{ color: '#722ed1' }}
             />
           </Card>
         </Col>

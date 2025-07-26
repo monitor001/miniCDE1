@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, DatePicker, Select, message, Card, L
 import axiosInstance from '../axiosConfig';
 import moment from 'moment';
 import { PlusOutlined, UploadOutlined, CalendarOutlined, TeamOutlined, FileOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { useSelector } from 'react-redux';
 
 const { Option } = Select;
 const { Title } = Typography;
@@ -33,6 +34,7 @@ const Project: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [dateRangeFilter, setDateRangeFilter] = useState<[moment.Moment | null, moment.Moment | null]>([null, null]);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
+  const isDarkMode = useSelector((state: any) => state.ui.theme === 'dark' || (state.ui.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
   // Kiểm tra authentication khi component mount
   useEffect(() => {
@@ -205,7 +207,7 @@ const Project: React.FC = () => {
         // Đảm bảo các trường quan trọng luôn có giá trị
         const processedProject = {
           ...project,
-          description: typeof project.description === 'string' ? project.description : '',
+          // Không ép kiểu hoặc ghi đè description, chỉ lấy nguyên giá trị từ backend
           startDate: startDate,
           endDate: endDate,
           priority: priority,
@@ -335,15 +337,16 @@ const Project: React.FC = () => {
       const currentValues = form.getFieldsValue();
       console.log('Current form values:', currentValues);
       
-      form.setFieldsValue({
-        name: currentValues.name || '',
-        description: currentValues.description || '',
-        status: currentValues.status || 'ACTIVE',
-        priority: currentValues.priority || 'MEDIUM',
-        startDate: currentValues.startDate || null,
-        endDate: currentValues.endDate || null,
-        memberIds: currentValues.memberIds || []
-      });
+      // XÓA ĐOẠN NÀY để không ghi đè giá trị người dùng nhập
+      // form.setFieldsValue({
+      //   name: currentValues.name || '',
+      //   description: currentValues.description || '',
+      //   status: currentValues.status || 'ACTIVE',
+      //   priority: currentValues.priority || 'MEDIUM',
+      //   startDate: currentValues.startDate || null,
+      //   endDate: currentValues.endDate || null,
+      //   memberIds: currentValues.memberIds || []
+      // });
       
       // Validate form
       const values = await form.validateFields();
@@ -359,7 +362,7 @@ const Project: React.FC = () => {
       const formattedValues = {
         ...values,
         name: values.name?.trim(),
-        description: values.description?.trim() || '',
+        description: values.description && typeof values.description === 'string' && values.description.trim() !== '' ? values.description.trim() : null,
         startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : null,
         endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : null,
         priority: values.priority || 'MEDIUM',
@@ -804,6 +807,29 @@ const Project: React.FC = () => {
                 <Button type="link" danger>Xóa</Button>
               </Popconfirm>
             ]}
+            style={{
+              borderRadius: 16,
+              boxShadow: isDarkMode
+                ? '0 4px 24px 0 rgba(0,0,0,0.35), 0 1.5px 6px 0 rgba(0,0,0,0.18)'
+                : '0 4px 24px 0 rgba(24, 144, 255, 0.10), 0 1.5px 6px 0 rgba(0,0,0,0.06)',
+              border: `2px solid ${
+                project.status === 'ACTIVE' ? (isDarkMode ? '#177ddc' : '#1890ff') :
+                project.status === 'COMPLETED' ? (isDarkMode ? '#49aa19' : '#52c41a') :
+                project.status === 'ON_HOLD' ? (isDarkMode ? '#d89614' : '#faad14') :
+                project.status === 'CANCELLED' ? (isDarkMode ? '#a61d24' : '#ff4d4f') :
+                (isDarkMode ? '#434343' : '#e4e4e4')
+              }`,
+              transition: 'transform 0.2s cubic-bezier(.4,2,.6,1), box-shadow 0.2s',
+              padding: 16,
+              background: isDarkMode ? '#1f1f1f' : undefined
+            }}
+            bodyStyle={{
+              borderRadius: 16,
+              minHeight: 120,
+              background: isDarkMode ? '#141414' : '#fafdff',
+              transition: 'background 0.2s'
+            }}
+            className="project-card-highlight"
           >
             <div style={{ marginBottom: 8 }}>
               <CalendarOutlined style={{ marginRight: 8 }} />
@@ -900,6 +926,11 @@ const Project: React.FC = () => {
           <Card
             hoverable
             title={project.name}
+            extra={
+              <Tag color={getPriorityColor(project.priority)}>
+                {priorityLevels.find(p => p.value === project.priority)?.label || 'Không'}
+              </Tag>
+            }
             actions={[
               <Button type="link" onClick={() => showDetail(project)} key="detail">Chi tiết</Button>,
               <Button type="link" onClick={() => handleEdit(project)} key="edit">Sửa</Button>,
@@ -913,6 +944,28 @@ const Project: React.FC = () => {
                 <Button type="link" danger>Xóa</Button>
               </Popconfirm>
             ]}
+            style={{
+              borderRadius: 16,
+              boxShadow: isDarkMode
+                ? '0 4px 24px 0 rgba(0,0,0,0.35), 0 1.5px 6px 0 rgba(0,0,0,0.18)'
+                : '0 4px 24px 0 rgba(24, 144, 255, 0.10), 0 1.5px 6px 0 rgba(0,0,0,0.06)',
+              border: `2px solid ${
+                project.status === 'ACTIVE' ? (isDarkMode ? '#177ddc' : '#1890ff') :
+                project.status === 'COMPLETED' ? (isDarkMode ? '#49aa19' : '#52c41a') :
+                project.status === 'ON_HOLD' ? (isDarkMode ? '#d89614' : '#faad14') :
+                project.status === 'CANCELLED' ? (isDarkMode ? '#a61d24' : '#ff4d4f') :
+                (isDarkMode ? '#434343' : '#e4e4e4')
+              }`,
+              transition: 'transform 0.2s cubic-bezier(.4,2,.6,1), box-shadow 0.2s',
+              padding: 16
+            }}
+            bodyStyle={{
+              borderRadius: 16,
+              minHeight: 120,
+              background: isDarkMode ? '#141414' : '#fafdff',
+              transition: 'background 0.2s'
+            }}
+            className="project-card-highlight"
           >
             <div style={{ marginBottom: 8 }}>
               <CalendarOutlined style={{ marginRight: 8 }} />
@@ -1088,7 +1141,7 @@ const Project: React.FC = () => {
         </Row>
       )}
       
-      <Modal open={modalOpen} title={editingProject ? 'Sửa dự án' : 'Thêm dự án'} onOk={handleOk} onCancel={() => setModalOpen(false)}>
+      <Modal open={modalOpen} title={editingProject ? 'Sửa dự án' : 'Thêm dự án'} onOk={handleOk} onCancel={() => setModalOpen(false)} destroyOnClose>
         <Form 
           form={form} 
           layout="vertical"
@@ -1108,7 +1161,9 @@ const Project: React.FC = () => {
           >
             <Input />
           </Form.Item>
-          <Form.Item name="description" label="Mô tả"> <Input.TextArea /> </Form.Item>
+          <Form.Item name="description" label="Mô tả">
+            <Input.TextArea onChange={e => { console.log('Mô tả nhập:', e.target.value); }} />
+          </Form.Item>
           <Form.Item name="status" label="Trạng thái" rules={[{ required: true, message: 'Chọn trạng thái!' }]}>
             <Select>
               <Select.Option value="ACTIVE">Đang hoạt động</Select.Option>
