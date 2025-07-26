@@ -34,6 +34,28 @@ const Project: React.FC = () => {
   const [dateRangeFilter, setDateRangeFilter] = useState<[moment.Moment | null, moment.Moment | null]>([null, null]);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
 
+  // Kiểm tra authentication khi component mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    console.log('Project component mount - Auth check:', {
+      hasToken: !!token,
+      hasUser: !!user,
+      tokenLength: token ? token.length : 0,
+      userData: user ? JSON.parse(user) : null
+    });
+    
+    if (!token || !user) {
+      console.error('Authentication missing in Project component');
+      return;
+    }
+    
+    // Fetch data
+    fetchProjects();
+    fetchUsers();
+  }, []);
+  
   // Hàm định nghĩa giá trị sắp xếp cho các trạng thái
   const getStatusSortValue = (status: string): number => {
     switch (status) {
@@ -60,6 +82,15 @@ const Project: React.FC = () => {
     setLoading(true);
     try {
       console.log('Fetching projects...');
+      
+      // Kiểm tra token trước khi gọi API
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token available for API call');
+        message.error('Authentication required. Please log in again.');
+        return;
+      }
+      
       const res = await axiosInstance.get('/projects');
       console.log('Projects data response:', res.data);
       
@@ -197,9 +228,19 @@ const Project: React.FC = () => {
       
       console.log('Processed and sorted projects:', processedProjects);
       setProjects(processedProjects);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching projects:', error);
-      message.error('Không thể tải danh sách dự án!');
+      
+      if (error.response?.status === 401) {
+        console.log('401 error - redirecting to login');
+        // Clear auth data and redirect
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        return;
+      }
+      
+      message.error(error.response?.data?.error || 'Không thể tải danh sách dự án!');
       setProjects([]);
     } finally {
       setLoading(false);
@@ -226,8 +267,7 @@ const Project: React.FC = () => {
       setUsers([]);
     }
   };
-  useEffect(() => { fetchProjects(); fetchUsers(); }, []);
-
+  
   const handleAdd = () => {
     console.log('Adding new project...');
     setEditingProject(null);

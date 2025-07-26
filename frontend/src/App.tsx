@@ -37,7 +37,43 @@ const queryClient = new QueryClient({
 // Auth guard component
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
-  return token ? <>{children}</> : <Navigate to="/login" replace />;
+  const user = localStorage.getItem('user');
+  
+  console.log('PrivateRoute check:', { 
+    hasToken: !!token, 
+    hasUser: !!user,
+    token: token ? `${token.substring(0, 20)}...` : 'null',
+    user: user ? JSON.parse(user).name : 'null'
+  });
+  
+  if (!token) {
+    console.log('No token found, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (!user) {
+    console.log('No user found, redirecting to login');
+    localStorage.removeItem('token'); // Clear invalid token
+    return <Navigate to="/login" replace />;
+  }
+  
+  try {
+    const userData = JSON.parse(user);
+    if (!userData.id || !userData.email) {
+      console.log('Invalid user data, redirecting to login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      return <Navigate to="/login" replace />;
+    }
+  } catch (error) {
+    console.log('Error parsing user data, redirecting to login');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return <Navigate to="/login" replace />;
+  }
+  
+  console.log('Authentication valid, rendering protected route');
+  return <>{children}</>;
 };
 
 const App: React.FC = () => {

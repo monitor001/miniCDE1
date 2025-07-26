@@ -42,11 +42,12 @@ axiosInstance.interceptors.response.use(
       // Handle different status codes
       switch (response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
+          // Unauthorized - clear token but don't redirect automatically
+          console.log('401 Unauthorized - clearing auth data');
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          window.location.href = '/login';
-          message.error('Your session has expired. Please log in again.');
+          // Don't redirect automatically, let components handle it
+          message.error('Authentication failed. Please log in again.');
           break;
         
         case 403:
