@@ -1063,9 +1063,37 @@ const Project: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="startDate" label="Ngày bắt đầu"> <DatePicker style={{ width: '100%' }} /> </Form.Item>
-          <Form.Item name="endDate" label="Ngày kết thúc"> <DatePicker style={{ width: '100%' }} /> </Form.Item>
-          <Form.Item name="memberIds" label="Thành viên"> <Select mode="multiple" options={users.map((u: any) => ({ value: u.id, label: u.name }))} /> </Form.Item>
+          <Form.Item name="startDate" label="Ngày bắt đầu">
+            <DatePicker 
+              style={{ width: '100%' }} 
+              format="DD/MM/YYYY"
+              placeholder="Chọn ngày bắt đầu"
+              popupStyle={{ zIndex: 1060 }}
+              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+            />
+          </Form.Item>
+          <Form.Item name="endDate" label="Ngày kết thúc">
+            <DatePicker 
+              style={{ width: '100%' }} 
+              format="DD/MM/YYYY"
+              placeholder="Chọn ngày kết thúc"
+              popupStyle={{ zIndex: 1060 }}
+              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+            />
+          </Form.Item>
+          <Form.Item name="memberIds" label="Thành viên">
+            <Select 
+              mode="multiple" 
+              options={users.map((u: any) => ({ value: u.id, label: u.name }))}
+              placeholder="Chọn thành viên"
+              filterOption={(input, option) => 
+                option?.label?.toLowerCase().indexOf(input.toLowerCase()) >= 0
+              }
+              showSearch
+              style={{ width: '100%' }}
+              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+            />
+          </Form.Item>
         </Form>
       </Modal>
       

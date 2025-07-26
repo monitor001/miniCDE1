@@ -993,3 +993,157 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
     }
   }
 }; 
+
+/**
+ * Get project images
+ * @route GET /api/projects/:id/images
+ */
+export const getProjectImages = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if project exists and user has access
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        members: true
+      }
+    });
+    
+    if (!project) {
+      throw new ApiError(404, 'Project not found');
+    }
+    
+    // Check if user has access to this project
+    if (req.user?.role !== 'ADMIN') {
+      const isMember = project.members.some((member) => 
+        member.userId === req.user?.id
+      );
+      if (!isMember) {
+        throw new ApiError(403, 'You do not have access to this project');
+      }
+    }
+    
+    // For now, this is a placeholder that returns an empty array
+    // In a real implementation, you would fetch images from your database or file storage
+    const images: Array<{
+      id: string;
+      name: string;
+      url: string;
+      projectId: string;
+      userId?: string;
+      createdAt: string;
+    }> = [];
+    
+    res.status(200).json(images);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Get project images error:', error);
+      res.status(500).json({ error: 'Failed to fetch project images' });
+    }
+  }
+};
+
+/**
+ * Upload project images
+ * @route POST /api/projects/:id/images
+ */
+export const uploadProjectImages = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if project exists
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        members: true
+      }
+    });
+    
+    if (!project) {
+      throw new ApiError(404, 'Project not found');
+    }
+    
+    // Check if user has access to this project
+    if (req.user?.role !== 'ADMIN') {
+      const isMember = project.members.some((member) => 
+        member.userId === req.user?.id
+      );
+      if (!isMember) {
+        throw new ApiError(403, 'You do not have access to this project');
+      }
+    }
+    
+    // Check if files were uploaded
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      throw new ApiError(400, 'No files were uploaded');
+    }
+    
+    // For now, this is a placeholder that simulates successful upload
+    // In a real implementation, you would save the files and update your database
+    const uploadedImages = files.map(file => ({
+      id: `img-${Date.now()}`,
+      name: file.originalname,
+      url: `/uploads/${file.filename}`,
+      projectId: id,
+      userId: req.user?.id,
+      createdAt: new Date().toISOString()
+    }));
+    
+    res.status(201).json(uploadedImages);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Upload project images error:', error);
+      res.status(500).json({ error: 'Failed to upload images' });
+    }
+  }
+};
+
+/**
+ * Delete project image
+ * @route DELETE /api/projects/:id/images/:imageId
+ */
+export const deleteProjectImage = async (req: Request, res: Response) => {
+  try {
+    const { id, imageId } = req.params;
+    
+    // Check if project exists
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        members: true
+      }
+    });
+    
+    if (!project) {
+      throw new ApiError(404, 'Project not found');
+    }
+    
+    // Check if user has access to this project
+    if (req.user?.role !== 'ADMIN') {
+      const isMember = project.members.some((member) => 
+        member.userId === req.user?.id
+      );
+      if (!isMember) {
+        throw new ApiError(403, 'You do not have access to this project');
+      }
+    }
+    
+    // For now, this is a placeholder that simulates successful deletion
+    // In a real implementation, you would delete the file and update your database
+    
+    res.status(200).json({ message: 'Image deleted successfully' });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Delete project image error:', error);
+      res.status(500).json({ error: 'Failed to delete image' });
+    }
+  }
+}; 

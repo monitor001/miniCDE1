@@ -10,7 +10,10 @@ import {
   updateProjectMemberRole,
   getProjectNotes,
   createProjectNote,
-  deleteProjectNote
+  deleteProjectNote,
+  uploadProjectImages,
+  getProjectImages,
+  deleteProjectImage
 } from '../controllers/projectController';
 import { authMiddleware, authorize, projectAccess } from '../middlewares/auth';
 
@@ -40,5 +43,10 @@ router.put('/:id/members/:memberId', authMiddleware, projectAccess, updateProjec
 router.get('/:id/notes', authMiddleware, projectAccess, getProjectNotes);
 router.post('/:id/notes', authMiddleware, projectAccess, createProjectNote);
 router.delete('/:id/notes/:noteId', authMiddleware, projectAccess, deleteProjectNote);
+
+// Project images
+router.get('/:id/images', authMiddleware, projectAccess, getProjectImages);
+router.post('/:id/images', authMiddleware, projectAccess, uploadProjectImages);
+router.delete('/:id/images/:imageId', authMiddleware, projectAccess, deleteProjectImage);
 
 export default router; 

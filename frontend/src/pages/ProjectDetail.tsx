@@ -45,6 +45,7 @@ const ProjectDetail: React.FC = () => {
   const [isUploadModalVisible, setIsUploadModalVisible] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [fileList, setFileList] = useState<any[]>([]);
+  const [projectImages, setProjectImages] = useState<any[]>([]);
 
   // Fetch project data
   useEffect(() => {
@@ -52,6 +53,28 @@ const ProjectDetail: React.FC = () => {
       dispatch(fetchProjectById(id) as any);
     }
   }, [dispatch, id]);
+  
+  // Fetch project images
+  useEffect(() => {
+    const fetchImages = async () => {
+      if (id) {
+        try {
+          const response = await axiosInstance.get(`/projects/${id}/images`);
+          if (Array.isArray(response.data)) {
+            setProjectImages(response.data);
+          } else {
+            console.warn('Unexpected images data format:', response.data);
+            setProjectImages([]);
+          }
+        } catch (error) {
+          console.error('Error fetching images:', error);
+          setProjectImages([]);
+        }
+      }
+    };
+    
+    fetchImages();
+  }, [id]);
   
   // Fetch project notes
   useEffect(() => {
@@ -270,34 +293,52 @@ const ProjectDetail: React.FC = () => {
             {t('uploads.uploadFiles')}
           </Button>
         </div>
-        <List
-          // Placeholder implementation that would be replaced with actual data
-          dataSource={[]}
-          renderItem={(file: any) => (
-            <List.Item
-              key={file.id}
-              actions={[
-                <span key="date">
-                  {file.createdAt ? moment(file.createdAt).format('YYYY-MM-DD') : '-'}
-                </span>,
-                <span key="user">
-                  {file.user?.name || 'Unknown'}
-                </span>,
-              ]}
-            >
-              <List.Item.Meta
-                title={file.name || 'Unknown'}
-                description={file.description || ''}
-              />
-              <div>
-                <a href={file.url} target="_blank" rel="noopener noreferrer">
-                  {t('common.download')}
-                </a>
-              </div>
-            </List.Item>
-          )}
-          locale={{ emptyText: t('uploads.noFiles') }}
-        />
+        
+        {projectImages && projectImages.length > 0 ? (
+          <List
+            grid={{ gutter: 16, column: 4 }}
+            dataSource={projectImages}
+            renderItem={(file: any) => (
+              <List.Item key={file.id}>
+                <Card
+                  hoverable
+                  cover={
+                    <img 
+                      alt={file.name || 'Project image'} 
+                      src={file.url} 
+                      style={{ height: 200, objectFit: 'cover' }}
+                    />
+                  }
+                  actions={[
+                    <a 
+                      key="download" 
+                      href={file.url} 
+                      download 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      {t('common.download')}
+                    </a>
+                  ]}
+                >
+                  <Card.Meta
+                    title={file.name || 'Image'}
+                    description={
+                      <>
+                        <div>{moment(file.createdAt).format('DD/MM/YYYY')}</div>
+                        <div>{file.user?.name || 'Unknown user'}</div>
+                      </>
+                    }
+                  />
+                </Card>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <p>{t('uploads.noFiles')}</p>
+          </div>
+        )}
       </>
     ),
   };
@@ -528,13 +569,24 @@ const ProjectDetail: React.FC = () => {
     
     try {
       console.log('Uploading files:', fileList);
-      const response = await axiosInstance.post('/projects/upload', formData, {
+      const response = await axiosInstance.post(`/projects/${id}/images`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
       
       console.log('Upload response:', response.data);
+      
+      // Refresh the image list by fetching the latest images
+      try {
+        const imagesResponse = await axiosInstance.get(`/projects/${id}/images`);
+        if (Array.isArray(imagesResponse.data)) {
+          setProjectImages(imagesResponse.data);
+        }
+      } catch (imgError) {
+        console.error('Error refreshing images:', imgError);
+      }
+      
       message.success(t('uploads.success'));
       setFileList([]);
       setIsUploadModalVisible(false);
@@ -647,13 +699,23 @@ const ProjectDetail: React.FC = () => {
             name="startDate"
             label={t('projects.startDate')}
           >
-            <DatePicker />
+            <DatePicker 
+              format="DD/MM/YYYY" 
+              style={{ width: '100%' }}
+              popupStyle={{ zIndex: 1060 }}
+              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+            />
           </Form.Item>
           <Form.Item
             name="endDate"
             label={t('projects.endDate')}
           >
-            <DatePicker />
+            <DatePicker 
+              format="DD/MM/YYYY" 
+              style={{ width: '100%' }}
+              popupStyle={{ zIndex: 1060 }}
+              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+            />
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit">
