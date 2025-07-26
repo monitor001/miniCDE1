@@ -6,7 +6,9 @@ import {
   updateUser,
   deleteUser,
   getUserProjects,
-  getUserTasks
+  getUserTasks,
+  getAssignableUsers,
+  testUsers
 } from '../controllers/userController';
 import { authMiddleware, authorize } from '../middlewares/auth';
 
@@ -17,6 +19,12 @@ router.use(authMiddleware);
 
 // Get all users (admin only)
 router.get('/', authorize(['ADMIN']), getUsers);
+
+// Get assignable users for task assignment
+router.get('/assignable', getAssignableUsers);
+
+// Test endpoint - no auth required
+router.get('/test', testUsers);
 
 // Get user by ID
 router.get('/:id', getUserById);

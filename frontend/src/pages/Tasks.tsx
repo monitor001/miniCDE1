@@ -152,28 +152,56 @@ const Tasks: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
+      // Debug: Check authentication
+      const token = localStorage.getItem('token');
+      console.log('🔍 Debug - Token exists:', !!token);
+      console.log('🔍 Debug - Token:', token ? token.substring(0, 20) + '...' : 'No token');
+      
+      // Thử lấy tất cả users (cho admin)
       const res = await axiosInstance.get('/users');
-      setUsers(Array.isArray(res.data) ? res.data : []);
+      const usersData = res.data.users || res.data;
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      console.log('✅ Users fetched successfully:', usersData.length);
     } catch (e) {
-      console.error('Lỗi fetchUsers:', e);
-      message.error('Không thể tải danh sách người dùng!');
-      setUsers([]);
+      console.error('❌ Lỗi fetchUsers (admin):', e);
+      // Nếu không phải admin, thử lấy users từ project đầu tiên
+      try {
+        if (projects.length > 0) {
+          console.log('🔄 Trying assignable users for project:', projects[0].id);
+          const res = await axiosInstance.get(`/users/assignable?projectId=${projects[0].id}`);
+          setUsers(Array.isArray(res.data) ? res.data : []);
+          console.log('✅ Assignable users fetched:', res.data.length);
+        } else {
+          console.log('⚠️ No projects available for assignable users');
+          setUsers([]);
+        }
+      } catch (e2) {
+        console.error('❌ Lỗi fetchUsers (assignable):', e2);
+        message.error('Không thể tải danh sách người dùng!');
+        setUsers([]);
+      }
     }
   };
 
   const fetchProjects = async () => {
     try {
+      // Debug: Check authentication
+      const token = localStorage.getItem('token');
+      console.log('🔍 Debug - Projects - Token exists:', !!token);
+      
       const res = await axiosInstance.get('/projects');
-      setProjects(Array.isArray(res.data) ? res.data : []);
+      // Backend trả về { projects, pagination }
+      const projectsData = res.data.projects || res.data;
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      console.log('✅ Projects fetched successfully:', projectsData.length);
     } catch (e) {
-      console.error('Lỗi fetchProjects:', e);
+      console.error('❌ Lỗi fetchProjects:', e);
       setProjects([]);
     }
   };
 
   useEffect(() => {
     fetchTasks();
-    fetchUsers();
     fetchProjects();
     
     // Cấu hình Socket.IO với URL chính xác
@@ -231,6 +259,12 @@ const Tasks: React.FC = () => {
       console.error('Socket.IO setup error:', error);
     }
   }, []);
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      fetchUsers();
+    }
+  }, [projects]);
 
   useEffect(() => {
     fetchTasks(pagination.current, pagination.pageSize);

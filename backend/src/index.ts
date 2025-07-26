@@ -67,6 +67,29 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Test endpoint - no auth required
+app.get('/api/test/users', async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true
+      },
+      take: 5
+    });
+    
+    res.status(200).json({
+      message: 'Test endpoint working',
+      users: users
+    });
+  } catch (error) {
+    console.error('Test users error:', error);
+    res.status(500).json({ error: 'Failed to fetch test users' });
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authMiddleware, userRoutes);

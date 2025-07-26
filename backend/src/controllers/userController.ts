@@ -96,6 +96,96 @@ export const getUsers = async (req: Request, res: Response) => {
 };
 
 /**
+ * Get users for task assignment (project members can see users in their projects)
+ * @route GET /api/users/assignable
+ */
+export const getAssignableUsers = async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.query;
+    
+    if (!projectId) {
+      throw new ApiError(400, 'Project ID is required');
+    }
+    
+    // Check if user has access to this project
+    if (req.user?.role !== 'ADMIN') {
+      const projectMembership = await prisma.projectMember.findUnique({
+        where: {
+          userId_projectId: {
+            userId: req.user?.id as string,
+            projectId: projectId as string
+          }
+        }
+      });
+      
+      if (!projectMembership) {
+        throw new ApiError(403, 'You do not have access to this project');
+      }
+    }
+    
+    // Get all users who are members of this project
+    const projectMembers = await prisma.projectMember.findMany({
+      where: {
+        projectId: projectId as string
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+    
+    const users = projectMembers.map(member => ({
+      id: member.user.id,
+      name: member.user.name,
+      email: member.user.email,
+      role: member.user.role,
+      projectRole: member.role
+    }));
+    
+    res.status(200).json(users);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Get assignable users error:', error);
+      res.status(500).json({ error: 'Failed to fetch assignable users' });
+    }
+  }
+};
+
+/**
+ * Test endpoint - no authentication required
+ * @route GET /api/users/test
+ */
+export const testUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true
+      },
+      take: 5
+    });
+    
+    res.status(200).json({
+      message: 'Test endpoint working',
+      users: users
+    });
+  } catch (error) {
+    console.error('Test users error:', error);
+    res.status(500).json({ error: 'Failed to fetch test users' });
+  }
+};
+
+/**
  * Get user by ID
  * @route GET /api/users/:id
  */
