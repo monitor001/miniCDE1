@@ -1,0 +1,216 @@
+// This is your Prisma schema file for CDE BIM ISO 19650
+// Learn more about Prisma: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String          @id @default(uuid())
+  email           String          @unique
+  password        String
+  name            String
+  code            String?         // Employee code
+  middleName      String?         // Middle name
+  gender          String?         // Gender
+  dob             DateTime?       // Date of birth
+  address         String?         // Address
+  role            Role            @default(USER)
+  organization    String?
+  twoFactorSecret String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  projects        ProjectMember[]
+  tasks           Task[]
+  documents       Document[]
+  comments        Comment[]
+  projectNotes    ProjectNote[]   // Relation to project notes
+}
+
+enum Role {
+  ADMIN
+  PROJECT_MANAGER
+  BIM_MANAGER
+  CONTRIBUTOR
+  VIEWER
+  USER
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus
+  startDate   DateTime?
+  endDate     DateTime?
+  priority    String?         // Project priority: LOW, MEDIUM, HIGH, URGENT
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  members     ProjectMember[]
+  documents   Document[]
+  tasks       Task[]
+  containers  Container[]
+  notes       ProjectNote[]   // Relation to project notes
+}
+
+// Project Note model for storing notes
+model ProjectNote {
+  id        String   @id @default(uuid())
+  content   String
+  project   Project  @relation(fields: [projectId], references: [id])
+  projectId String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  project   Project  @relation(fields: [projectId], references: [id])
+  projectId String
+  role      Role
+  joinedAt  DateTime @default(now())
+
+  @@unique([userId, projectId])
+}
+
+model Container {
+  id          String          @id @default(uuid())
+  name        String
+  code        String          // ISO 19650 container code
+  status      ContainerStatus
+  project     Project         @relation(fields: [projectId], references: [id])
+  projectId   String
+  documents   Document[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum ContainerStatus {
+  WORK_IN_PROGRESS
+  SHARED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Document {
+  id           String            @id @default(uuid())
+  name         String
+  description  String?
+  fileUrl      String
+  fileSize     Int
+  fileType     String
+  version      Int               @default(1)
+  revisionCode String?           // ISO 19650 revision code
+  status       DocumentStatus
+  metadata     Json?             // Additional BIM metadata
+  project      Project           @relation(fields: [projectId], references: [id])
+  projectId    String
+  container    Container?        @relation(fields: [containerId], references: [id])
+  containerId  String?
+  uploader     User              @relation(fields: [uploaderId], references: [id])
+  uploaderId   String
+  tasks        TaskDocument[]
+  history      DocumentHistory[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+enum DocumentStatus {
+  WORK_IN_PROGRESS
+  SHARED
+  PUBLISHED
+  ARCHIVED
+}
+
+model DocumentHistory {
+  id           String         @id @default(uuid())
+  document     Document       @relation(fields: [documentId], references: [id])
+  documentId   String
+  version      Int
+  fileUrl      String
+  revisionCode String?
+  status       DocumentStatus
+  updatedBy    String
+  comment      String?
+  createdAt    DateTime       @default(now())
+}
+
+model Task {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus
+  priority    Priority
+  dueDate     DateTime?
+  assignee    User?          @relation(fields: [assigneeId], references: [id])
+  assigneeId  String?
+  project     Project        @relation(fields: [projectId], references: [id])
+  projectId   String
+  documents   TaskDocument[]
+  comments    Comment[]
+  history     TaskHistory[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model TaskDocument {
+  task        Task     @relation(fields: [taskId], references: [id])
+  taskId      String
+  document    Document @relation(fields: [documentId], references: [id])
+  documentId  String
+  createdAt   DateTime @default(now())
+
+  @@id([taskId, documentId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  task      Task     @relation(fields: [taskId], references: [id])
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaskHistory {
+  id        String   @id @default(uuid())
+  task      Task     @relation(fields: [taskId], references: [id])
+  taskId    String
+  action    String
+  details   String?
+  userId    String
+  createdAt DateTime @default(now())
+}

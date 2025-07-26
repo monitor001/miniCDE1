@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: minicde_postgres
+    environment:
+      POSTGRES_DB: minicde_bim
+      POSTGRES_USER: minicde_user
+      POSTGRES_PASSWORD: minicde_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minicde_user -d minicde_bim"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: minicde_backend
+    environment:
+      DATABASE_URL: postgresql://minicde_user:minicde_password@postgres:5432/minicde_bim
+      JWT_SECRET: your_secure_jwt_secret_here
+      JWT_EXPIRES_IN: 7d
+      PORT: 3001
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend/uploads:/app/uploads
+    restart: unless-stopped
+
+  init-db:
+    build: ./backend
+    container_name: minicde_init_db
+    environment:
+      DATABASE_URL: postgresql://minicde_user:minicde_password@postgres:5432/minicde_bim
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy"
+
+  frontend:
+    build: ./frontend
+    container_name: minicde_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data: 
