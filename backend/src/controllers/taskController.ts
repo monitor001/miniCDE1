@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient, TaskStatus, Priority } from '@prisma/client';
+import { PrismaClient, TaskStatus, Priority, Role } from '@prisma/client';
 import { Server } from 'socket.io';
 import { ApiError } from '../middlewares/errorHandler';
+import { logActivity } from '../utils/activityLogger';
 
 declare const io: Server;
 
@@ -346,6 +347,27 @@ export const createTask = async (req: Request, res: Response) => {
       });
     }
 
+    // Notify task creation via Socket.IO
+    global.io.to(`project:${projectId}`).emit('task:created', {
+      task: {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        assignee: task.assignee
+      },
+      createdBy: req.user?.id
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'create',
+      objectType: 'task',
+      objectId: task.id,
+      description: `Tạo công việc "${task.title}"`
+    });
+    
     res.status(201).json(task);
   } catch (error) {
     if (error instanceof ApiError) {
@@ -652,6 +674,26 @@ export const addComment = async (req: Request, res: Response) => {
       });
     }
 
+    // Notify comment creation via Socket.IO
+    global.io.to(`task:${id}`).emit('task:comment:created', {
+      taskId: id,
+      comment: {
+        id: comment.id,
+        content: comment.content,
+        user: comment.user
+      },
+      createdBy: req.user?.id
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'comment',
+      objectType: 'task',
+      objectId: id,
+      description: `Thêm bình luận cho công việc "${task.title}"`
+    });
+    
     res.status(201).json(comment);
   } catch (error) {
     if (error instanceof ApiError) {

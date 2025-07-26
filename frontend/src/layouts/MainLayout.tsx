@@ -17,7 +17,10 @@ import {
   BellOutlined,
   GlobalOutlined,
   BulbOutlined,
-  CheckSquareOutlined
+  CheckSquareOutlined,
+  ExclamationCircleOutlined,
+  CalendarOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 
 import { RootState } from '../store';
@@ -123,23 +126,45 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
       onClick: () => navigate('/projects')
     },
     {
-      key: 'documents',
-      icon: <FileOutlined />,
-      label: t('navigation.documents'),
-      onClick: () => navigate('/documents')
-    },
-    {
       key: 'tasks',
       icon: <CheckSquareOutlined />,
       label: t('navigation.tasks'),
       onClick: () => navigate('/tasks')
     },
     {
+      key: 'documents',
+      icon: <FileOutlined />,
+      label: t('navigation.documents'),
+      onClick: () => navigate('/documents')
+    },
+    {
+      key: 'issues',
+      icon: <ExclamationCircleOutlined />,
+      label: 'Vấn đề',
+      onClick: () => navigate('/issues'),
+      description: 'Quản lý vấn đề, yêu cầu thông tin và theo dõi giải quyết'
+    },
+    {
+      key: 'calendar',
+      icon: <CalendarOutlined />,
+      label: 'Lịch',
+      onClick: () => navigate('/calendar'),
+      description: 'Quản lý lịch họp, deadline, milestone và các sự kiện dự án'
+    },
+    {
+      key: 'reports',
+      icon: <FileTextOutlined />,
+      label: 'Báo cáo',
+      onClick: () => navigate('/reports'),
+      description: 'Quản lý báo cáo và theo dõi hoạt động hệ thống'
+    },
+    // Chỉ hiển thị menu Users cho ADMIN
+    ...(user?.role === 'ADMIN' ? [{
       key: 'users',
       icon: <TeamOutlined />,
       label: t('navigation.users'),
       onClick: () => navigate('/users')
-    },
+    }] : []),
     {
       key: 'settings',
       icon: <SettingOutlined />,

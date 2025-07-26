@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: minicde_postgres
     environment:
       POSTGRES_DB: minicde_bim
@@ -12,45 +12,81 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U minicde_user -d minicde_bim"]
       interval: 10s
       timeout: 5s
       retries: 5
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
 
-  backend:
-    build: ./backend
-    container_name: minicde_backend
-    environment:
-      DATABASE_URL: postgresql://minicde_user:minicde_password@postgres:5432/minicde_bim
-      JWT_SECRET: your_secure_jwt_secret_here
-      JWT_EXPIRES_IN: 7d
-      PORT: 3001
-      NODE_ENV: development
+  redis:
+    image: redis:7-alpine
+    container_name: minicde_redis
     ports:
-      - "3001:3001"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  init-db:
+    image: postgres:15-alpine
+    container_name: minicde_init_db
     depends_on:
       postgres:
         condition: service_healthy
-      init-db:
-        condition: service_completed_successfully
+    environment:
+      POSTGRES_DB: minicde_bim
+      POSTGRES_USER: minicde_user
+      POSTGRES_PASSWORD: minicde_password
+      POSTGRES_HOST: postgres
+    volumes:
+      - ./scripts/postgres-setup.sh:/docker-entrypoint-initdb.d/postgres-setup.sh
+    command: ["sh", "-c", "sleep 5 && psql -h postgres -U minicde_user -d minicde_bim -f /docker-entrypoint-initdb.d/postgres-setup.sh"]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: minicde_backend
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://minicde_user:minicde_password@postgres:5432/minicde_bim
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+      - PORT=3001
+      - JWT_SECRET=your_secure_jwt_secret_here
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend/uploads:/app/uploads
     restart: unless-stopped
 
-  init-db:
-    build: ./backend
-    container_name: minicde_init_db
-    environment:
-      DATABASE_URL: postgresql://minicde_user:minicde_password@postgres:5432/minicde_bim
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: sh -c "npx prisma migrate deploy"
-
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: minicde_frontend
     ports:
       - "3000:80"
@@ -59,4 +95,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data: 
+  postgres_data:
+  redis_data: 

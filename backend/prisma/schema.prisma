@@ -30,6 +30,17 @@ model User {
   documents       Document[]
   comments        Comment[]
   projectNotes    ProjectNote[]   // Relation to project notes
+  activityLogs    ActivityLog[]
+  issuesCreated   Issue[]         @relation("IssueCreatedBy")
+  issuesAssigned  Issue[]         @relation("IssueAssignee")
+  calendarEvents  CalendarEvent[]
+  reports         Report[]
+  calendarEventAttendees CalendarEventAttendee[]
+
+  @@index([email])
+  @@index([role])
+  @@index([organization])
+  @@index([createdAt])
 }
 
 enum Role {
@@ -56,6 +67,18 @@ model Project {
   tasks       Task[]
   containers  Container[]
   notes       ProjectNote[]   // Relation to project notes
+  issues      Issue[]
+  calendarEvents CalendarEvent[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([name])
+  @@index([status, priority])
+  @@index([startDate, endDate])
 }
 
 // Project Note model for storing notes
@@ -68,6 +91,11 @@ model ProjectNote {
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([projectId, createdAt])
 }
 
 enum ProjectStatus {
@@ -88,6 +116,10 @@ model ProjectMember {
   joinedAt  DateTime @default(now())
 
   @@unique([userId, projectId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([role])
+  @@index([projectId, role])
 }
 
 model Container {
@@ -100,6 +132,11 @@ model Container {
   documents   Document[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([code])
+  @@index([projectId, status])
 }
 
 enum ContainerStatus {
@@ -130,6 +167,17 @@ model Document {
   history      DocumentHistory[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+
+  @@index([projectId])
+  @@index([containerId])
+  @@index([uploaderId])
+  @@index([status])
+  @@index([fileType])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([name])
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
 }
 
 enum DocumentStatus {
@@ -150,6 +198,12 @@ model DocumentHistory {
   updatedBy    String
   comment      String?
   createdAt    DateTime       @default(now())
+
+  @@index([documentId])
+  @@index([version])
+  @@index([status])
+  @@index([createdAt])
+  @@index([documentId, version])
 }
 
 model Task {
@@ -168,6 +222,19 @@ model Task {
   history     TaskHistory[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([title])
+  @@index([projectId, status])
+  @@index([projectId, assigneeId])
+  @@index([status, priority])
+  @@index([dueDate, status])
 }
 
 enum TaskStatus {
@@ -192,6 +259,8 @@ model TaskDocument {
   createdAt   DateTime @default(now())
 
   @@id([taskId, documentId])
+  @@index([taskId])
+  @@index([documentId])
 }
 
 model Comment {
@@ -203,6 +272,11 @@ model Comment {
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([taskId, createdAt])
 }
 
 model TaskHistory {
@@ -213,4 +287,85 @@ model TaskHistory {
   details   String?
   userId    String
   createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([taskId, createdAt])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  action      String   // upload, download, approve, comment, tag, ...
+  objectType  String   // project, document, task, comment, ...
+  objectId    String   // id của đối tượng liên quan
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([objectType])
+  @@index([objectId])
+  @@index([createdAt])
+}
+
+model Issue {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  title       String
+  description String?
+  type        String   // ISSUE, RFI
+  status      String   // NEW, IN_PROGRESS, RESOLVED, CLOSED, OVERDUE
+  priority    String   // HIGH, MEDIUM, LOW
+  project     Project? @relation(fields: [projectId], references: [id])
+  projectId   String?
+  createdBy   User?    @relation("IssueCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+  assignee    User?    @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  assigneeId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  type        String   // MEETING, DEADLINE, MILESTONE, EVENT
+  startDate   DateTime
+  endDate     DateTime
+  location    String?
+  isAllDay    Boolean? @default(false)
+  color       String?
+  reminder    Int?     // minutes before event
+  project     Project? @relation(fields: [projectId], references: [id])
+  projectId   String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdById String?
+  attendees   CalendarEventAttendee[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CalendarEventAttendee {
+  event     CalendarEvent @relation(fields: [eventId], references: [id])
+  eventId   String
+  user      User          @relation(fields: [userId], references: [id])
+  userId    String
+  // Có thể bổ sung trường trạng thái tham gia (accepted, declined, tentative)
+  status    String?       // ACCEPTED, DECLINED, TENTATIVE, INVITED
+  @@id([eventId, userId])
+  @@index([userId])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  title       String
+  type        String   // PROGRESS, DOCUMENT, ISSUE, USER, MODEL, ...
+  data        Json
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdAt   DateTime @default(now())
 }

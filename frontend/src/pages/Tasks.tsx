@@ -44,8 +44,10 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  MessageOutlined
 } from '@ant-design/icons';
+import { useSelector } from 'react-redux';
 
 const { Option } = Select;
 const { Text, Title } = Typography;
@@ -113,6 +115,13 @@ const Tasks: React.FC = () => {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [historyTaskId, setHistoryTaskId] = useState<string>('');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
+  const [commentTask, setCommentTask] = useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentValue, setCommentValue] = useState('');
+  const [commentLoading, setCommentLoading] = useState(false);
+  const theme = useSelector((state: any) => state.ui.theme);
+  const isDarkMode = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   const fetchTasks = async (page = 1, pageSize = 10) => {
     setLoading(true);
@@ -198,6 +207,48 @@ const Tasks: React.FC = () => {
       console.error('❌ Lỗi fetchProjects:', e);
       setProjects([]);
     }
+  };
+
+  // Fetch comments for a task
+  const fetchComments = async (taskId: string) => {
+    setCommentLoading(true);
+    try {
+      const res = await axiosInstance.get(`/tasks/${taskId}`);
+      setComments(res.data.comments || []);
+    } catch (e) {
+      setComments([]);
+    }
+    setCommentLoading(false);
+  };
+
+  // Open comment drawer
+  const openCommentDrawer = (task: any) => {
+    if (!task || !task.id) {
+      message.warning('Vui lòng chọn một nhiệm vụ cụ thể để trao đổi ghi chú!');
+      return;
+    }
+    setCommentTask(task);
+    setCommentDrawerOpen(true);
+    fetchComments(task.id);
+    setTimeout(() => {
+      const input = document.getElementById('comment-input');
+      if (input) (input as HTMLTextAreaElement).focus();
+    }, 300);
+  };
+
+  // Add comment
+  const handleAddComment = async () => {
+    if (!commentValue.trim() || !commentTask || !commentTask.id) return;
+    setCommentLoading(true);
+    try {
+      await axiosInstance.post(`/tasks/${commentTask.id}/comments`, { content: commentValue.trim() });
+      setCommentValue('');
+      fetchComments(commentTask.id);
+      message.success('Đã thêm ghi chú!');
+    } catch (e) {
+      message.error('Không thể thêm ghi chú!');
+    }
+    setCommentLoading(false);
   };
 
   useEffect(() => {
@@ -374,14 +425,17 @@ const Tasks: React.FC = () => {
     fetchTasks(pagination.current, pagination.pageSize);
   };
 
+  // Nâng cấp icon trạng thái
   const getStatusIcon = (status: string) => {
+    let color = '#bfbfbf', icon = <ClockCircleOutlined style={{ fontSize: 20 }} />;
     switch (status) {
-      case 'TODO': return <ClockCircleOutlined />;
-      case 'IN_PROGRESS': return <ExclamationCircleOutlined />;
-      case 'REVIEW': return <ExclamationCircleOutlined />;
-      case 'COMPLETED': return <CheckCircleOutlined />;
-      default: return <ClockCircleOutlined />;
+      case 'TODO': color = '#bfbfbf'; icon = <ClockCircleOutlined style={{ fontSize: 20, color: color }} />; break;
+      case 'IN_PROGRESS': color = '#faad14'; icon = <ExclamationCircleOutlined style={{ fontSize: 20, color: color }} />; break;
+      case 'REVIEW': color = '#1890ff'; icon = <ExclamationCircleOutlined style={{ fontSize: 20, color: color }} />; break;
+      case 'COMPLETED': color = '#52c41a'; icon = <CheckCircleOutlined style={{ fontSize: 20, color: color }} />; break;
+      default: break;
     }
+    return <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: color + '22', marginRight: 4 }}>{icon}</span>;
   };
 
   const columns = [
@@ -486,7 +540,88 @@ const Tasks: React.FC = () => {
           </Popconfirm>
         </Space>
       )
+    },
+    {
+      title: 'Ghi chú',
+      key: 'comments',
+      render: (_: any, record: any) => (
+        record && record.id ? (
+          <Tooltip title="Trao đổi/ghi chú">
+            <Badge count={record._count?.comments || 0} size="small">
+              <Button
+                shape="circle"
+                icon={<MessageOutlined />}
+                onClick={() => openCommentDrawer(record)}
+                size="small"
+              />
+            </Badge>
+          </Tooltip>
+        ) : (
+          <Tooltip title="Chỉ xem ghi chú cho từng nhiệm vụ cụ thể">
+            <Button shape="circle" icon={<MessageOutlined />} size="small" disabled />
+          </Tooltip>
+        )
+      )
     }
+  ];
+
+  // 1. Table cha chỉ hiển thị tên dự án
+  const parentColumns = [
+    {
+      title: '',
+      dataIndex: 'project',
+      key: 'project',
+      render: (_: any, record: any) => (
+        <span style={{ fontWeight: 600, fontSize: 16 }}>
+          <Tag color="blue" style={{ fontSize: 15 }}>{record.project.name}</Tag>
+        </span>
+      )
+    }
+  ];
+
+  // 2. Table con: không có cột dự án, cột tên công việc rộng hơn
+  const childColumns = [
+    {
+      title: 'Tên công việc',
+      dataIndex: 'title',
+      key: 'title',
+      width: '28%',
+      render: (text: string, record: any) => (
+        <div>
+          <div style={{ fontWeight: 'bold', fontSize: 15 }}>{text}</div>
+          {record.description && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {record.description.length > 80 
+                ? `${record.description.substring(0, 80)}...` 
+                : record.description}
+            </Text>
+          )}
+        </div>
+      )
+    },
+    ...columns.filter(col => col.key !== 'project' && col.key !== 'title').map(col =>
+      col.key === 'comments' ? {
+        ...col,
+        render: (_: any, record: any) => (
+          record && record.id ? (
+            <Tooltip title="Trao đổi/ghi chú">
+              <Badge count={record._count?.comments || 0} size="small" style={record._count?.comments > 0 ? { backgroundColor: '#ff4d4f' } : {}}>
+                <Button
+                  shape="circle"
+                  icon={<MessageOutlined />}
+                  onClick={() => openCommentDrawer(record)}
+                  size="small"
+                />
+              </Badge>
+            </Tooltip>
+          ) : (
+            <Tooltip title="Chỉ xem ghi chú cho từng nhiệm vụ cụ thể">
+              <Button shape="circle" icon={<MessageOutlined />} size="small" disabled />
+            </Tooltip>
+          )
+        )
+      } : col
+    )
   ];
 
   const taskStats = {
@@ -497,6 +632,13 @@ const Tasks: React.FC = () => {
     completed: tasks.filter(t => t.status === 'COMPLETED').length,
     overdue: tasks.filter(t => t.dueDate && moment(t.dueDate).isBefore(moment(), 'day')).length
   };
+
+  // Nhóm tasks theo projectId
+  const groupedTasks = projects.map(project => ({
+    key: project.id,
+    project,
+    tasks: tasks.filter(t => t.projectId === project.id),
+  })).filter(g => g.tasks.length > 0);
 
   return (
     <div style={{ padding: '24px' }}>
@@ -654,27 +796,27 @@ const Tasks: React.FC = () => {
 
         {/* Task Table */}
         <Table
-          columns={columns}
-          dataSource={tasks}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} công việc`
-          }}
-          onChange={handleTableChange}
-          locale={{
-            emptyText: (
-              <Empty
-                description="Không có công việc nào"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+          columns={parentColumns}
+          dataSource={groupedTasks}
+          rowKey={record => (record && typeof record === 'object' && 'key' in record ? (record as any).key : undefined)}
+          expandable={{
+            expandedRowRender: (record) => (
+              <Table
+                columns={childColumns}
+                dataSource={record.tasks}
+                rowKey={task => (task && typeof task === 'object' && 'id' in task ? (task as any).id : undefined)}
+                pagination={false}
+                showHeader={true}
+                bordered={false}
               />
-            )
+            ),
+            rowExpandable: record => record.tasks.length > 0,
           }}
+          pagination={false}
+          showHeader={false}
+          bordered
+          style={{ marginTop: 24 }}
+          locale={{ emptyText: 'Không có công việc nào' }}
         />
       </div>
 
@@ -794,6 +936,83 @@ const Tasks: React.FC = () => {
             </List.Item>
           )}
         />
+      </Drawer>
+
+      {/* Comment Drawer */}
+      <Drawer
+        title={`Ghi chú cho: ${commentTask?.title || ''}`}
+        placement="right"
+        width={400}
+        onClose={() => setCommentDrawerOpen(false)}
+        open={commentDrawerOpen}
+        destroyOnClose
+        bodyStyle={{
+          background: isDarkMode ? '#18191c' : '#fff',
+          color: isDarkMode ? '#fff' : '#222',
+          padding: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%'
+        }}
+        headerStyle={{
+          background: isDarkMode ? '#18191c' : '#fff',
+          color: isDarkMode ? '#fff' : '#222',
+          borderBottom: isDarkMode ? '1px solid #333' : '1px solid #f0f0f0'
+        }}
+      >
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, minHeight: 200 }}>
+          <List
+            loading={commentLoading}
+            dataSource={comments}
+            locale={{ emptyText: 'Chưa có ghi chú nào.' }}
+            renderItem={(item: any) => (
+              <List.Item style={{
+                background: item.user?.id === (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).id : '') ? (isDarkMode ? '#223355' : '#e6f7ff') : (isDarkMode ? '#232428' : '#fff'),
+                color: isDarkMode ? '#fff' : '#222',
+                borderBottom: isDarkMode ? '1px solid #222' : '1px solid #f0f0f0',
+                borderRadius: 6,
+                margin: '4px 0',
+                boxShadow: isDarkMode ? '0 1px 2px #0002' : '0 1px 2px #0001'
+              }}>
+                <List.Item.Meta
+                  avatar={<Avatar icon={<UserOutlined />} style={{ background: isDarkMode ? '#222' : undefined }} />}
+                  title={<span style={{ color: isDarkMode ? '#fff' : '#222' }}>{item.user?.name || 'Người dùng'}</span>}
+                  description={<span style={{ color: isDarkMode ? '#aaa' : '#555' }}>{item.content}</span>}
+                />
+                <div style={{ fontSize: 11, color: isDarkMode ? '#aaa' : '#888' }}>{moment(item.createdAt).format('DD/MM/YYYY HH:mm')}</div>
+              </List.Item>
+            )}
+            style={{ background: 'transparent' }}
+          />
+        </div>
+        <div style={{
+          borderTop: isDarkMode ? '1px solid #222' : '1px solid #f0f0f0',
+          background: isDarkMode ? '#18191c' : '#fff',
+          padding: 12,
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 2
+        }}>
+          <Input.TextArea
+            id="comment-input"
+            rows={3}
+            value={commentValue}
+            onChange={e => setCommentValue(e.target.value)}
+            placeholder="Nhập ghi chú trao đổi..."
+            style={{ background: isDarkMode ? '#232428' : '#fff', color: isDarkMode ? '#fff' : '#222', borderColor: isDarkMode ? '#333' : undefined }}
+            onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+          />
+          <Button
+            type="primary"
+            onClick={handleAddComment}
+            loading={commentLoading}
+            disabled={!commentValue.trim()}
+            style={{ marginTop: 8, background: isDarkMode ? '#223355' : undefined, color: isDarkMode ? '#fff' : undefined, border: isDarkMode ? 'none' : undefined }}
+            block
+          >
+            Gửi ghi chú
+          </Button>
+        </div>
       </Drawer>
     </div>
   );

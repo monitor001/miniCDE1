@@ -1,13 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, message, Card, List, Upload, Space, Popconfirm, Drawer, Typography, Row, Col, Tag, Radio, Tabs } from 'antd';
+import { Table, Button, Modal, Form, Input, DatePicker, Select, message, Card, List, Upload, Space, Popconfirm, Drawer, Typography, Row, Col, Tag, Radio, Tabs, Badge, Avatar, Tooltip, Mentions } from 'antd';
 import axiosInstance from '../axiosConfig';
 import moment from 'moment';
-import { PlusOutlined, UploadOutlined, CalendarOutlined, TeamOutlined, FileOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { 
+  PlusOutlined, 
+  UploadOutlined, 
+  CalendarOutlined, 
+  TeamOutlined, 
+  FileOutlined, 
+  CheckCircleOutlined, 
+  ClockCircleOutlined, 
+  ExclamationCircleOutlined, 
+  CloseCircleOutlined, 
+  MessageOutlined, 
+  UserOutlined
+} from '@ant-design/icons';
 import { useSelector } from 'react-redux';
+import io from 'socket.io-client';
+import debounce from 'lodash.debounce';
 
 const { Option } = Select;
 const { Title } = Typography;
 const { TabPane } = Tabs;
+const { TextArea } = Input;
 
 // Định nghĩa các mức độ ưu tiên
 const priorityLevels = [
@@ -35,6 +50,15 @@ const Project: React.FC = () => {
   const [dateRangeFilter, setDateRangeFilter] = useState<[moment.Moment | null, moment.Moment | null]>([null, null]);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
   const isDarkMode = useSelector((state: any) => state.ui.theme === 'dark' || (state.ui.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
+  const [commentProject, setCommentProject] = useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentValue, setCommentValue] = useState('');
+  const [commentLoading, setCommentLoading] = useState(false);
+  
+  // Tách biệt comments cho từng dự án
+  const [projectComments, setProjectComments] = useState<{ [key: string]: any[] }>({});
+  const [projectCommentsLoading, setProjectCommentsLoading] = useState<{ [key: string]: boolean }>({});
 
   // Kiểm tra authentication khi component mount
   useEffect(() => {
@@ -56,6 +80,59 @@ const Project: React.FC = () => {
     // Fetch data
     fetchProjects();
     fetchUsers();
+    
+    // Socket.IO setup for project comments
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
+    console.log('Connecting to Socket.IO at:', socketUrl);
+    
+    try {
+      const socket = io(socketUrl, {
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
+      
+      const showCommentToast = debounce((msg: string) => message.info(msg), 1000, { leading: true, trailing: false });
+      
+      socket.on('connect', () => {
+        console.log('Socket.IO connected successfully:', socket.id);
+      });
+      
+      socket.on('connect_error', (error: Error) => {
+        console.error('Socket.IO connection error:', error);
+      });
+      
+      socket.on('project:note:created', (data: any) => {
+        showCommentToast('Có bình luận mới cho dự án!');
+        // Refresh comments for the specific project
+        if (commentProject && data.projectId === commentProject.id) {
+          fetchComments(commentProject.id);
+        }
+        // Also refresh for project detail if it's the same project
+        if (detail && data.projectId === detail.id) {
+          fetchProjectDetailComments(detail.id);
+        }
+      });
+      
+      socket.on('project:note:deleted', (data: any) => {
+        showCommentToast('Bình luận đã được xóa');
+        // Refresh comments for the specific project
+        if (commentProject && data.projectId === commentProject.id) {
+          fetchComments(commentProject.id);
+        }
+        // Also refresh for project detail if it's the same project
+        if (detail && data.projectId === detail.id) {
+          fetchProjectDetailComments(detail.id);
+        }
+      });
+      
+      return () => {
+        socket.disconnect();
+      };
+    } catch (error) {
+      console.error('Socket.IO setup error:', error);
+    }
   }, []);
   
   // Hàm định nghĩa giá trị sắp xếp cho các trạng thái
@@ -269,6 +346,71 @@ const Project: React.FC = () => {
       setUsers([]);
     }
   };
+
+  // Fetch comments for a specific project
+  const fetchComments = async (projectId: string) => {
+    setCommentLoading(true);
+    try {
+      console.log('Fetching comments for project:', projectId);
+      const res = await axiosInstance.get(`/projects/${projectId}/notes`);
+      console.log('Comments API response:', res.data);
+      setComments(res.data || []);
+      console.log('Comments state updated:', res.data || []);
+    } catch (e) {
+      console.error('Error fetching project comments:', e);
+      setComments([]);
+    }
+    setCommentLoading(false);
+  };
+
+  // Fetch comments for project detail (tách biệt)
+  const fetchProjectDetailComments = async (projectId: string) => {
+    setProjectCommentsLoading(prev => ({ ...prev, [projectId]: true }));
+    try {
+      const res = await axiosInstance.get(`/projects/${projectId}/notes`);
+      setProjectComments(prev => ({ ...prev, [projectId]: res.data || [] }));
+    } catch (e) {
+      console.error('Error fetching project detail comments:', e);
+      setProjectComments(prev => ({ ...prev, [projectId]: [] }));
+    }
+    setProjectCommentsLoading(prev => ({ ...prev, [projectId]: false }));
+  };
+
+  // Open comment drawer
+  const openCommentDrawer = (project: any) => {
+    if (!project || !project.id) {
+      message.warning('Vui lòng chọn một dự án cụ thể để trao đổi ghi chú!');
+      return;
+    }
+    setCommentProject(project);
+    setCommentDrawerOpen(true);
+    
+    // Gọi API để lấy ghi chú khi mở drawer
+    fetchComments(project.id);
+    
+    setTimeout(() => {
+      const input = document.getElementById('project-comment-input');
+      if (input) (input as HTMLTextAreaElement).focus();
+    }, 300);
+  };
+
+  // Add comment
+  const handleAddComment = async () => {
+    if (!commentValue.trim() || !commentProject || !commentProject.id) return;
+    setCommentLoading(true);
+    try {
+      await axiosInstance.post(`/projects/${commentProject.id}/notes`, {
+        content: commentValue.trim()
+      });
+      setCommentValue('');
+      fetchComments(commentProject.id);
+      message.success('Đã thêm ghi chú!');
+    } catch (e) {
+      console.error('Error adding project comment:', e);
+      message.error('Không thể thêm ghi chú!');
+    }
+    setCommentLoading(false);
+  };
   
   const handleAdd = () => {
     console.log('Adding new project...');
@@ -366,7 +508,16 @@ const Project: React.FC = () => {
         startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : null,
         endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : null,
         priority: values.priority || 'MEDIUM',
-        memberIds: values.memberIds || []
+        // Gửi đúng định dạng members cho backend: [{ userId, role }]
+        members: (values.memberIds || []).map((userId: string) => {
+          // Nếu đang sửa, lấy role cũ nếu có, mặc định là 'USER'
+          let role = 'USER';
+          if (editingProject && editingProject.members && Array.isArray(editingProject.members)) {
+            const found = editingProject.members.find((m: any) => m.userId === userId || m.user?.id === userId);
+            if (found && found.role) role = found.role;
+          }
+          return { userId, role };
+        })
       };
       
       console.log('Sending project data:', formattedValues);
@@ -376,7 +527,12 @@ const Project: React.FC = () => {
         console.log('Project update response:', response.data);
         message.success('Đã cập nhật dự án');
       } else {
-        const response = await axiosInstance.post('/projects', formattedValues);
+        // Khi tạo mới, gửi members đúng định dạng
+        const createValues = {
+          ...formattedValues,
+          members: (values.memberIds || []).map((userId: string) => ({ userId, role: 'USER' }))
+        };
+        const response = await axiosInstance.post('/projects', createValues);
         console.log('Project create response:', response.data);
         message.success('Đã tạo dự án');
       }
@@ -431,44 +587,22 @@ const Project: React.FC = () => {
     }
   };
   const showDetail = async (record: any) => {
+    setDrawerOpen(true);
+    setDetail(null);
+    
     try {
       console.log('Fetching project details for ID:', record.id);
       const res = await axiosInstance.get(`/projects/${record.id}`);
       console.log('Project detail response:', res.data);
+      console.log('Notes from API:', res.data.notes);
       
-      // Xử lý dữ liệu trước khi hiển thị
       const projectData = res.data;
       
-      // Chuyển đổi định dạng ngày tháng
-      let startDate = null;
-      let endDate = null;
-      
-      if (projectData.startDate) {
-        try {
-          startDate = moment(projectData.startDate).isValid() ? 
-            moment(projectData.startDate) : null;
-        } catch (e) {
-          console.error('Error parsing startDate:', e);
-        }
-      }
-      
-      if (projectData.endDate) {
-        try {
-          endDate = moment(projectData.endDate).isValid() ? 
-            moment(projectData.endDate) : null;
-        } catch (e) {
-          console.error('Error parsing endDate:', e);
-        }
-      }
-      
-      // Đảm bảo các trường có giá trị mặc định
+      // Process the data
       const processedData = {
         ...projectData,
-        name: projectData.name || '',
-        description: projectData.description || '',
-        status: projectData.status || 'ACTIVE',
-        startDate: startDate,
-        endDate: endDate,
+        startDate: projectData.startDate ? moment(projectData.startDate).format('DD/MM/YYYY') : null,
+        endDate: projectData.endDate ? moment(projectData.endDate).format('DD/MM/YYYY') : null,
         members: Array.isArray(projectData.members) ? projectData.members : [],
         documents: Array.isArray(projectData.documents) ? projectData.documents : [],
         tasks: Array.isArray(projectData.tasks) ? projectData.tasks : [],
@@ -476,13 +610,21 @@ const Project: React.FC = () => {
         notes: Array.isArray(projectData.notes) ? projectData.notes : []
       };
       
-      console.log('Processed project data:', processedData);
       setDetail(processedData);
-      setDrawerOpen(true);
-    } catch (error: any) {
+      
+      // Cập nhật projectComments từ dữ liệu API response
+      if (projectData.notes && Array.isArray(projectData.notes) && projectData.notes.length > 0) {
+        console.log('Setting project comments from API response:', projectData.notes);
+        setProjectComments(prev => ({ ...prev, [record.id]: projectData.notes }));
+      } else {
+        console.log('No notes in API response, calling fetchProjectDetailComments');
+        // Nếu không có notes trong response, gọi API riêng
+        fetchProjectDetailComments(record.id);
+      }
+      
+    } catch (error) {
       console.error('Error fetching project details:', error);
-      console.error('Error response:', error.response?.data);
-      message.error('Không thể tải thông tin chi tiết dự án');
+      message.error('Không thể tải chi tiết dự án!');
     }
   };
   const handleAddNote = async (values: any) => {
@@ -648,17 +790,45 @@ const Project: React.FC = () => {
   };
 
   const columns = [
-    { 
-      title: 'Tên dự án', 
-      dataIndex: 'name', 
+    {
+      title: 'Tên dự án',
+      dataIndex: 'name',
       key: 'name',
-      render: (text: string) => text || '-'
+      width: 220,
+      render: (text: string) => (
+        <Tooltip title={text} placement="topLeft">
+          <span style={{
+            display: 'inline-block',
+            maxWidth: 200,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            verticalAlign: 'middle',
+            fontWeight: 600,
+            fontSize: 15
+          }}>{text || '-'}</span>
+        </Tooltip>
+      )
     },
-    { 
-      title: 'Mô tả', 
-      dataIndex: 'description', 
+    {
+      title: 'Mô tả',
+      dataIndex: 'description',
       key: 'description',
-      render: (text: string) => text || '-'
+      width: 320,
+      render: (text: string) => (
+        <Tooltip title={text} placement="topLeft">
+          <span style={{
+            display: 'inline-block',
+            maxWidth: 300,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            verticalAlign: 'middle',
+            color: '#888',
+            fontSize: 13
+          }}>{text || '-'}</span>
+        </Tooltip>
+      )
     },
     {
       title: 'Trạng thái',
@@ -675,16 +845,16 @@ const Project: React.FC = () => {
         </Tag>
       )
     },
-    { 
-      title: 'Ngày bắt đầu', 
-      dataIndex: 'startDate', 
-      key: 'startDate', 
+    {
+      title: 'Ngày bắt đầu',
+      dataIndex: 'startDate',
+      key: 'startDate',
       render: renderDate
     },
-    { 
-      title: 'Ngày kết thúc', 
-      dataIndex: 'endDate', 
-      key: 'endDate', 
+    {
+      title: 'Ngày kết thúc',
+      dataIndex: 'endDate',
+      key: 'endDate',
       render: renderDate
     },
     {
@@ -697,24 +867,35 @@ const Project: React.FC = () => {
         </Tag>
       )
     },
-    { 
-      title: 'Thành viên', 
-      dataIndex: 'members', 
-      key: 'members', 
+    {
+      title: 'Thành viên',
+      dataIndex: 'members',
+      key: 'members',
       render: (ms: any[]) => {
         if (!ms || !Array.isArray(ms) || ms.length === 0) return '-';
         return ms.map(m => m.user?.name || m.name || '').filter(Boolean).join(', ') || '-';
       }
     },
     {
-      title: 'Hành động', 
-      key: 'action', 
+      title: 'Hành động',
+      key: 'action',
       render: (_: any, record: any) => (
         <Space>
           <Button type="link" onClick={() => showDetail(record)}>Chi tiết</Button>
           <Button type="link" onClick={() => handleEdit(record)}>Sửa</Button>
-          <Popconfirm 
-            title="Xóa dự án này?" 
+          <Tooltip title="Trao đổi/ghi chú">
+            <Badge count={record._count?.notes || 0} size="small" style={record._count?.notes > 0 ? { backgroundColor: '#ff4d4f' } : {}}>
+              <Button
+                type="link"
+                icon={<MessageOutlined />}
+                onClick={() => openCommentDrawer(record)}
+              >
+                Bình luận
+              </Button>
+            </Badge>
+          </Tooltip>
+          <Popconfirm
+            title="Xóa dự án này?"
             onConfirm={() => handleDelete(record.id)}
             okText="Có"
             cancelText="Không"
@@ -769,14 +950,14 @@ const Project: React.FC = () => {
     return (
       <Col xs={24} sm={12} md={8} lg={6} key={project.id}>
         <div style={{ position: 'relative', marginBottom: '16px' }}>
-          <Tag 
-            style={{ 
+          <Tag
+            style={{
               position: 'absolute',
               top: '-10px',
               left: '16px',
               zIndex: 1
             }}
-            icon={getStatusIcon(project.status)} 
+            icon={getStatusIcon(project.status)}
             color={
               project.status === 'ACTIVE' ? 'blue' :
               project.status === 'COMPLETED' ? 'green' :
@@ -834,13 +1015,13 @@ const Project: React.FC = () => {
             <div style={{ marginBottom: 8 }}>
               <CalendarOutlined style={{ marginRight: 8 }} />
               <span>
-                {project.startDate && moment(project.startDate).isValid() 
-                  ? moment(project.startDate).format('DD/MM/YYYY') 
+                {project.startDate && moment(project.startDate).isValid()
+                  ? moment(project.startDate).format('DD/MM/YYYY')
                   : '-'
                 }
                 {' → '}
-                {project.endDate && moment(project.endDate).isValid() 
-                  ? moment(project.endDate).format('DD/MM/YYYY') 
+                {project.endDate && moment(project.endDate).isValid()
+                  ? moment(project.endDate).format('DD/MM/YYYY')
                   : '-'
                 }
               </span>
@@ -892,8 +1073,8 @@ const Project: React.FC = () => {
       <Col xs={24} sm={12} md={8} lg={6} key={project.id}>
         <div style={{ position: 'relative', marginBottom: '16px' }}>
           {/* Hiển thị thẻ ưu tiên phía trên bên trái */}
-          <Tag 
-            style={{ 
+          <Tag
+            style={{
               position: 'absolute',
               top: '-10px',
               left: '16px',
@@ -905,14 +1086,14 @@ const Project: React.FC = () => {
           </Tag>
           
           {/* Hiển thị thẻ trạng thái phía trên bên phải */}
-          <Tag 
-            style={{ 
+          <Tag
+            style={{
               position: 'absolute',
               top: '-10px',
               right: '16px',
               zIndex: 1
             }}
-            icon={getStatusIcon(project.status)} 
+            icon={getStatusIcon(project.status)}
             color={
               project.status === 'ACTIVE' ? 'blue' :
               project.status === 'COMPLETED' ? 'green' :
@@ -1007,8 +1188,8 @@ const Project: React.FC = () => {
       <div style={{ marginBottom: 16 }}>
         <Row gutter={16} align="middle">
           <Col>
-            <Radio.Group 
-              value={viewMode} 
+            <Radio.Group
+              value={viewMode}
               onChange={e => setViewMode(e.target.value)}
               buttonStyle="solid"
             >
@@ -1031,8 +1212,8 @@ const Project: React.FC = () => {
             </Button>
           </Col>
           <Col>
-            <Button 
-              type="link" 
+            <Button
+              type="link"
               onClick={() => {
                 setPriorityFilter(null);
                 setStatusFilter(null);
@@ -1099,8 +1280,8 @@ const Project: React.FC = () => {
           </Form.Item>
 
           <Form.Item>
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               block
               onClick={() => setFilterDrawerVisible(false)}
             >
@@ -1122,11 +1303,11 @@ const Project: React.FC = () => {
       {renderFilterDrawer()}
       
       {viewMode === 'table' ? (
-        <Table 
-          rowKey="id" 
-          columns={columns} 
-          dataSource={getFilteredProjects()} 
-          loading={loading} 
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={getFilteredProjects()}
+          loading={loading}
           bordered
           pagination={{
             showSizeChanger: true,
@@ -1142,8 +1323,8 @@ const Project: React.FC = () => {
       )}
       
       <Modal open={modalOpen} title={editingProject ? 'Sửa dự án' : 'Thêm dự án'} onOk={handleOk} onCancel={() => setModalOpen(false)} destroyOnClose>
-        <Form 
-          form={form} 
+        <Form
+          form={form}
           layout="vertical"
           initialValues={{
             status: 'ACTIVE',
@@ -1182,8 +1363,8 @@ const Project: React.FC = () => {
             </Select>
           </Form.Item>
           <Form.Item name="startDate" label="Ngày bắt đầu">
-            <DatePicker 
-              style={{ width: '100%' }} 
+            <DatePicker
+              style={{ width: '100%' }}
               format="DD/MM/YYYY"
               placeholder="Chọn ngày bắt đầu"
               popupStyle={{ zIndex: 1060 }}
@@ -1191,8 +1372,8 @@ const Project: React.FC = () => {
             />
           </Form.Item>
           <Form.Item name="endDate" label="Ngày kết thúc">
-            <DatePicker 
-              style={{ width: '100%' }} 
+            <DatePicker
+              style={{ width: '100%' }}
               format="DD/MM/YYYY"
               placeholder="Chọn ngày kết thúc"
               popupStyle={{ zIndex: 1060 }}
@@ -1200,11 +1381,11 @@ const Project: React.FC = () => {
             />
           </Form.Item>
           <Form.Item name="memberIds" label="Thành viên">
-            <Select 
-              mode="multiple" 
+            <Select
+              mode="multiple"
               options={users.map((u: any) => ({ value: u.id, label: u.name }))}
               placeholder="Chọn thành viên"
-              filterOption={(input, option) => 
+              filterOption={(input, option) =>
                 option?.label?.toLowerCase().indexOf(input.toLowerCase()) >= 0
               }
               showSearch
@@ -1234,30 +1415,30 @@ const Project: React.FC = () => {
             ) : '-'}</p>
             <p><b>Ngày bắt đầu:</b> {detail.startDate && moment(detail.startDate).isValid() ? moment(detail.startDate).format('DD/MM/YYYY') : '-'}</p>
             <p><b>Ngày kết thúc:</b> {detail.endDate && moment(detail.endDate).isValid() ? moment(detail.endDate).format('DD/MM/YYYY') : '-'}</p>
-            <p><b>Thành viên:</b> {detail.members && Array.isArray(detail.members) && detail.members.length > 0 ? 
+            <p><b>Thành viên:</b> {detail.members && Array.isArray(detail.members) && detail.members.length > 0 ?
               detail.members.map((m: any) => m.user?.name || m.name || '').filter(Boolean).join(', ') : '-'}</p>
             
             <Tabs defaultActiveKey="documents">
               <TabPane tab="Tài liệu" key="documents">
                 {detail.documents && Array.isArray(detail.documents) && detail.documents.length > 0 ? (
-                  <List 
-                    dataSource={detail.documents} 
+                  <List
+                    dataSource={detail.documents}
                     renderItem={(doc: any) => (
                       <List.Item>
                         <a href={doc.url} target="_blank" rel="noopener noreferrer">{doc.name || 'Tài liệu'}</a>
                       </List.Item>
-                    )} 
+                    )}
                   />
                 ) : <p>Chưa có tài liệu</p>}
               </TabPane>
               
               <TabPane tab="Công việc" key="tasks">
                 {detail.tasks && Array.isArray(detail.tasks) && detail.tasks.length > 0 ? (
-                  <List 
-                    dataSource={detail.tasks} 
+                  <List
+                    dataSource={detail.tasks}
                     renderItem={(task: any) => (
                       <List.Item>{task.title || 'Công việc'}</List.Item>
-                    )} 
+                    )}
                   />
                 ) : <p>Chưa có công việc</p>}
               </TabPane>
@@ -1275,44 +1456,200 @@ const Project: React.FC = () => {
                   <Button icon={<UploadOutlined />} loading={imgLoading}>Upload ảnh</Button>
                 </Upload>
                 {detail.images && Array.isArray(detail.images) && detail.images.length > 0 ? (
-                  <List 
-                    grid={{ gutter: 8, column: 4 }} 
-                    dataSource={detail.images} 
+                  <List
+                    grid={{ gutter: 8, column: 4 }}
+                    dataSource={detail.images}
                     renderItem={(img: any) => (
                       <List.Item>
                         <img src={img.url} alt="project" style={{ width: '100%', borderRadius: 8 }} />
                       </List.Item>
-                    )} 
+                    )}
                   />
                 ) : <p style={{ marginTop: 8 }}>Chưa có ảnh</p>}
               </TabPane>
               
               <TabPane tab="Ghi chú" key="notes">
-                <Form form={noteForm} layout="inline" onFinish={handleAddNote} style={{ marginBottom: 16 }}>
-                  <Form.Item name="content" rules={[{ required: true, message: 'Nhập ghi chú!' }]}> 
-                    <Input placeholder="Thêm ghi chú..." /> 
-                  </Form.Item>
-                  <Form.Item>
-                    <Button type="primary" htmlType="submit">Thêm</Button>
-                  </Form.Item>
-                </Form>
-                {detail.notes && Array.isArray(detail.notes) && detail.notes.length > 0 ? (
-                  <List 
-                    dataSource={detail.notes} 
-                    renderItem={(note: any) => (
-                      <List.Item>
-                        {note.content || ''} 
-                        <span style={{ color: '#888' }}>
-                          ({note.author?.name || 'Người dùng'})
-                        </span>
-                      </List.Item>
-                    )} 
-                  />
-                ) : <p>Chưa có ghi chú</p>}
+                <div style={{ 
+                  height: 320, 
+                  maxHeight: 400, 
+                  overflowY: 'auto',
+                  background: isDarkMode ? '#18191c' : '#fff',
+                  borderRadius: 8,
+                  padding: 12
+                }}>
+                  {projectCommentsLoading[detail.id] ? (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'center', 
+                      alignItems: 'center', 
+                      height: 200,
+                      color: isDarkMode ? '#fff' : '#222'
+                    }}>
+                      <div>Đang tải ghi chú...</div>
+                    </div>
+                  ) : (
+                    <List
+                      dataSource={projectComments[detail.id] || []}
+                      locale={{ 
+                        emptyText: (
+                          <div style={{ 
+                            textAlign: 'center', 
+                            padding: 20,
+                            color: isDarkMode ? '#aaa' : '#888'
+                          }}>
+                            <div style={{ fontSize: 16, marginBottom: 8 }}>📝</div>
+                            <div>Chưa có ghi chú nào</div>
+                            <div style={{ fontSize: 12, marginTop: 4 }}>
+                              Sử dụng nút "Bình luận" ở mục hành động để thêm ghi chú
+                            </div>
+                          </div>
+                        )
+                      }}
+                      renderItem={(item: any) => (
+                        <List.Item style={{
+                          background: item.user?.id === (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).id : '') ? 
+                            (isDarkMode ? '#223355' : '#e6f7ff') : 
+                            (isDarkMode ? '#232428' : '#fff'),
+                          color: isDarkMode ? '#fff' : '#222',
+                          borderBottom: isDarkMode ? '1px solid #222' : '1px solid #f0f0f0',
+                          borderRadius: 8,
+                          margin: '8px 0',
+                          padding: '12px',
+                          boxShadow: isDarkMode ? '0 2px 8px #0002' : '0 2px 8px #0001',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          <List.Item.Meta
+                            avatar={
+                              <Avatar 
+                                icon={<UserOutlined />} 
+                                style={{ 
+                                  background: isDarkMode ? '#222' : undefined,
+                                  border: isDarkMode ? '1px solid #333' : '1px solid #f0f0f0'
+                                }} 
+                              />
+                            }
+                            title={
+                              <span style={{ 
+                                color: isDarkMode ? '#fff' : '#222',
+                                fontWeight: 600,
+                                fontSize: 14
+                              }}>
+                                {item.user?.name || 'Người dùng'}
+                              </span>
+                            }
+                            description={
+                              <span style={{ 
+                                color: isDarkMode ? '#aaa' : '#555',
+                                fontSize: 13,
+                                lineHeight: 1.5,
+                                wordBreak: 'break-word'
+                              }}>
+                                {item.content}
+                              </span>
+                            }
+                          />
+                          <div style={{ 
+                            fontSize: 11, 
+                            color: isDarkMode ? '#aaa' : '#888',
+                            marginTop: 8,
+                            textAlign: 'right'
+                          }}>
+                            {moment(item.createdAt).format('DD/MM/YYYY HH:mm')}
+                          </div>
+                        </List.Item>
+                      )}
+                      style={{ background: 'transparent' }}
+                    />
+                  )}
+                </div>
               </TabPane>
             </Tabs>
           </div>
         )}
+      </Drawer>
+      
+      {/* Project Comments Drawer */}
+      <Drawer
+        title={`Ghi chú cho dự án: ${commentProject?.name || ''}`}
+        placement="right"
+        width={400}
+        onClose={() => setCommentDrawerOpen(false)}
+        open={commentDrawerOpen}
+        destroyOnClose
+        bodyStyle={{
+          background: isDarkMode ? '#18191c' : '#fff',
+          color: isDarkMode ? '#fff' : '#222',
+          padding: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%'
+        }}
+        headerStyle={{
+          background: isDarkMode ? '#18191c' : '#fff',
+          color: isDarkMode ? '#fff' : '#222',
+          borderBottom: isDarkMode ? '1px solid #333' : '1px solid #f0f0f0'
+        }}
+      >
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, minHeight: 200 }}>
+          <List
+            loading={commentLoading}
+            dataSource={comments}
+            locale={{ emptyText: 'Chưa có ghi chú nào.' }}
+            renderItem={(item: any) => (
+              <List.Item style={{
+                background: item.user?.id === (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!).id : '') ? (isDarkMode ? '#223355' : '#e6f7ff') : (isDarkMode ? '#232428' : '#fff'),
+                color: isDarkMode ? '#fff' : '#222',
+                borderBottom: isDarkMode ? '1px solid #222' : '1px solid #f0f0f0',
+                borderRadius: 6,
+                margin: '4px 0',
+                boxShadow: isDarkMode ? '0 1px 2px #0002' : '0 1px 2px #0001'
+              }}>
+                <List.Item.Meta
+                  avatar={<Avatar icon={<UserOutlined />} style={{ background: isDarkMode ? '#222' : undefined }} />}
+                  title={<span style={{ color: isDarkMode ? '#fff' : '#222' }}>{item.user?.name || 'Người dùng'}</span>}
+                  description={<span style={{ color: isDarkMode ? '#aaa' : '#555' }}>{item.content}</span>}
+                />
+                <div style={{ fontSize: 11, color: isDarkMode ? '#aaa' : '#888' }}>{moment(item.createdAt).format('DD/MM/YYYY HH:mm')}</div>
+              </List.Item>
+            )}
+            style={{ background: 'transparent' }}
+          />
+        </div>
+        <div style={{
+          borderTop: isDarkMode ? '1px solid #222' : '1px solid #f0f0f0',
+          background: isDarkMode ? '#18191c' : '#fff',
+          padding: 12,
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 2
+        }}>
+          <Mentions
+            rows={3}
+            placeholder="Nhập ghi chú trao đổi..."
+            value={commentValue}
+            onChange={val => setCommentValue(val)}
+            style={{ background: isDarkMode ? '#232428' : '#fff', color: isDarkMode ? '#fff' : '#222', borderColor: isDarkMode ? '#333' : undefined }}
+            onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            prefix="@"
+            notFoundContent={null}
+            loading={commentLoading}
+            options={users.map(user => ({
+              value: user.id,
+              label: user.name
+            }))}
+          />
+          <Button
+            type="primary"
+            onClick={handleAddComment}
+            loading={commentLoading}
+            disabled={!commentValue.trim()}
+            style={{ marginTop: 8, background: isDarkMode ? '#223355' : undefined, color: isDarkMode ? '#fff' : undefined, border: isDarkMode ? 'none' : undefined }}
+            block
+          >
+            Gửi ghi chú
+          </Button>
+        </div>
       </Drawer>
     </div>
   );

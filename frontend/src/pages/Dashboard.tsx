@@ -1,402 +1,179 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Card, 
-  Row, 
-  Col, 
-  Statistic, 
-  Table, 
-  Tag, 
-  Button, 
-  Space, 
-  Typography, 
-  Progress,
-  List,
-  Avatar,
-  Badge,
-  Calendar,
-  Tooltip
-} from 'antd';
-import { 
-  UserOutlined, 
-  ProjectOutlined, 
-  FileTextOutlined, 
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  CalendarOutlined,
-  ArrowRightOutlined
-} from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Typography, List, Avatar } from 'antd';
+import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ProjectOutlined, ArrowUpOutlined, UploadOutlined, DownloadOutlined, EyeOutlined, CommentOutlined, FileOutlined } from '@ant-design/icons';
 import axiosInstance from '../axiosConfig';
 import moment from 'moment';
-import dayjs, { Dayjs } from 'dayjs';
-import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client';
+import { Bar, Pie } from 'react-chartjs-2';
+import 'chart.js/auto';
+import { useSelector } from 'react-redux';
 
 const { Title, Text } = Typography;
 
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<any>({});
-  const [recentTasks, setRecentTasks] = useState<any[]>([]);
-  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [projectStats, setProjectStats] = useState({ total: 0, inProgress: 0, completed: 0, overdue: 0 });
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [projectStatusData, setProjectStatusData] = useState<any>({});
+  const [documentStats, setDocumentStats] = useState<any>({});
+  const isDarkMode = useSelector((state: any) => state.ui.theme === 'dark' || (state.ui.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
-  const fetchDashboardData = async () => {
+  const fetchStats = async () => {
     setLoading(true);
     try {
-      // Fetch tasks for current user
-      const tasksRes = await axiosInstance.get('/tasks?limit=10');
-      const allTasks = tasksRes.data.tasks || tasksRes.data;
-      
-      // Get current user's tasks
-      const currentUserTasks = allTasks.filter((task: any) => 
-        task.assigneeId === localStorage.getItem('userId') || 
-        task.assignee?.id === localStorage.getItem('userId')
-      );
-      
-      setMyTasks(currentUserTasks.slice(0, 5));
-      setRecentTasks(allTasks.slice(0, 5));
-
-      // Calculate statistics
-      const taskStats = {
-        total: allTasks.length,
-        todo: allTasks.filter((t: any) => t.status === 'TODO').length,
-        inProgress: allTasks.filter((t: any) => t.status === 'IN_PROGRESS').length,
-        review: allTasks.filter((t: any) => t.status === 'REVIEW').length,
-        completed: allTasks.filter((t: any) => t.status === 'COMPLETED').length,
-        overdue: allTasks.filter((t: any) => 
-          t.dueDate && moment(t.dueDate).isBefore(moment(), 'day')
-        ).length,
-        myTasks: currentUserTasks.length,
-        myCompleted: currentUserTasks.filter((t: any) => t.status === 'COMPLETED').length
-      };
-
-      setStats(taskStats);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      // Lấy danh sách dự án
+      const projectsRes = await axiosInstance.get('/projects?limit=1000');
+      const projects = projectsRes.data.projects || projectsRes.data;
+      const now = new Date();
+      let inProgress = 0, completed = 0, overdue = 0;
+      let statusCount: any = {};
+      projects.forEach((p: any) => {
+        statusCount[p.status] = (statusCount[p.status] || 0) + 1;
+        if (p.status === 'ACTIVE' || p.status === 'PLANNING' || p.status === 'ON_HOLD') inProgress++;
+        if (p.status === 'COMPLETED') completed++;
+        if ((p.status !== 'COMPLETED') && p.endDate && new Date(p.endDate) < now) overdue++;
+      });
+      setProjectStats({ total: projects.length, inProgress, completed, overdue });
+      setProjectStatusData({
+        labels: Object.keys(statusCount),
+        datasets: [{
+          label: 'Số lượng dự án',
+          data: Object.values(statusCount),
+          backgroundColor: ['#1890ff', '#faad14', '#52c41a', '#ff4d4f', '#722ed1', '#13c2c2'],
+        }]
+      });
+    } catch (e) {
+      setProjectStats({ total: 0, inProgress: 0, completed: 0, overdue: 0 });
+      setProjectStatusData({ labels: [], datasets: [] });
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchDashboardData();
+  const fetchDocumentStats = async () => {
+    try {
+      const res = await axiosInstance.get('/documents');
+      const docs = Array.isArray(res.data) ? res.data : [];
+      let categoryCount: any = {};
+      docs.forEach((d: any) => {
+        categoryCount[d.category] = (categoryCount[d.category] || 0) + 1;
+      });
+      setDocumentStats({
+        labels: Object.keys(categoryCount),
+        datasets: [{
+          label: 'Tài liệu',
+          data: Object.values(categoryCount),
+          backgroundColor: ['#52c41a', '#faad14', '#1890ff', '#ff4d4f', '#722ed1', '#13c2c2'],
+        }]
+      });
+    } catch (e) {
+      setDocumentStats({ labels: [], datasets: [] });
+    }
+  };
+
+  const fetchActivities = async () => {
+    try {
+      const res = await axiosInstance.get('/activities?limit=10');
+      setActivities(res.data.logs || []);
+    } catch (e) {
+      console.error('Error fetching activities:', e);
+    }
+  };
+
+  useEffect(() => { 
+    fetchStats(); 
+    fetchDocumentStats();
+    fetchActivities();
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'TODO': return 'default';
-      case 'IN_PROGRESS': return 'processing';
-      case 'REVIEW': return 'warning';
-      case 'COMPLETED': return 'success';
-      default: return 'default';
+  useEffect(() => {
+    const socket = io('http://localhost:3001');
+    socket.on('activity:new', (activity: any) => {
+      setActivities(prev => [activity, ...prev.slice(0, 9)]);
+    });
+    return () => { socket.disconnect(); };
+  }, []);
+
+  const getActivityIcon = (action: string) => {
+    switch (action) {
+      case 'upload': return <UploadOutlined style={{ color: '#1890ff' }} />;
+      case 'download': return <DownloadOutlined style={{ color: '#722ed1' }} />;
+      case 'view': return <EyeOutlined style={{ color: '#8c8c8c' }} />;
+      case 'comment': return <CommentOutlined style={{ color: '#52c41a' }} />;
+      case 'create': return <ProjectOutlined style={{ color: '#1890ff' }} />;
+      case 'update': return <ClockCircleOutlined style={{ color: '#faad14' }} />;
+      case 'delete': return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
+      default: return <ProjectOutlined style={{ color: '#1890ff' }} />;
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'LOW': return 'blue';
-      case 'MEDIUM': return 'orange';
-      case 'HIGH': return 'red';
-      case 'URGENT': return 'red';
-      default: return 'blue';
-    }
+  const getActivityText = (activity: any) => {
+    const actionMap: any = {
+      'upload': 'Upload',
+      'download': 'Downloaded',
+      'view': 'Viewed',
+      'comment': 'Commented on',
+      'create': 'Created',
+      'update': 'Updated',
+      'delete': 'Deleted'
+    };
+    return `${actionMap[activity.action] || activity.action} - ${activity.description}`;
   };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'TODO': return 'Chờ thực hiện';
-      case 'IN_PROGRESS': return 'Đang thực hiện';
-      case 'REVIEW': return 'Đang xem xét';
-      case 'COMPLETED': return 'Hoàn thành';
-      default: return status;
-    }
-  };
-
-  const getPriorityText = (priority: string) => {
-    switch (priority) {
-      case 'LOW': return 'Thấp';
-      case 'MEDIUM': return 'Trung bình';
-      case 'HIGH': return 'Cao';
-      case 'URGENT': return 'Khẩn cấp';
-      default: return priority;
-    }
-  };
-
-  const taskColumns = [
-    {
-      title: 'Tên công việc',
-      dataIndex: 'title',
-      key: 'title',
-      render: (text: string, record: any) => (
-        <div>
-          <div style={{ fontWeight: 'bold', cursor: 'pointer' }} 
-               onClick={() => navigate(`/tasks/${record.id}`)}>
-            {text}
-          </div>
-          {record.description && (
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              {record.description.length > 50 
-                ? `${record.description.substring(0, 50)}...` 
-                : record.description}
-            </Text>
-          )}
-        </div>
-      )
-    },
-    {
-      title: 'Dự án',
-      dataIndex: ['project', 'name'],
-      key: 'project',
-      render: (text: string) => <Tag color="blue">{text}</Tag>
-    },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Badge 
-          status={getStatusColor(status) as any} 
-          text={getStatusText(status)}
-        />
-      )
-    },
-    {
-      title: 'Độ ưu tiên',
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (priority: string) => (
-        <Tag color={getPriorityColor(priority)}>
-          {getPriorityText(priority)}
-        </Tag>
-      )
-    },
-    {
-      title: 'Hạn hoàn thành',
-      dataIndex: 'dueDate',
-      key: 'dueDate',
-      render: (date: string) => (
-        date ? (
-          <Space>
-            <CalendarOutlined />
-            <span style={{ 
-              color: moment(date).isBefore(moment(), 'day') ? '#ff4d4f' : 'inherit' 
-            }}>
-              {moment(date).format('DD/MM/YYYY')}
-            </span>
-          </Space>
-        ) : (
-          <Text type="secondary">Không có hạn</Text>
-        )
-      )
-    }
-  ];
-
-  const getCalendarData = (value: Dayjs) => {
-    const date = value.format('YYYY-MM-DD');
-    const dayTasks = myTasks.filter((task: any) => 
-      task.dueDate && moment(task.dueDate).format('YYYY-MM-DD') === date
-    );
-    
-    return dayTasks.map((task: any) => ({
-      type: 'success',
-      content: task.title,
-      task
-    }));
-  };
-
-  const dateCellRender = (value: Dayjs) => {
-    const data = getCalendarData(value);
-    return (
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {data.map((item, index) => (
-          <li key={index} style={{ marginBottom: 3 }}>
-            <Tooltip title={`${item.task.title} - ${getStatusText(item.task.status)}`}>
-              <div
-                style={{
-                  fontSize: '10px',
-                  padding: '1px 3px',
-                  borderRadius: '2px',
-                  backgroundColor: getStatusColor(item.task.status) === 'success' ? '#52c41a' : 
-                                   getStatusColor(item.task.status) === 'processing' ? '#1890ff' :
-                                   getStatusColor(item.task.status) === 'warning' ? '#faad14' : '#d9d9d9',
-                  color: 'white',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-                onClick={() => navigate(`/tasks/${item.task.id}`)}
-              >
-                {item.content}
-              </div>
-            </Tooltip>
-          </li>
-        ))}
-      </ul>
-    );
-  };
-
-  const completionRate = stats.myTasks > 0 ? (stats.myCompleted / stats.myTasks) * 100 : 0;
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Title level={2}>Dashboard</Title>
-      
-      {/* Statistics Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Tổng công việc"
-              value={stats.total}
-              prefix={<FileTextOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Công việc của tôi"
-              value={stats.myTasks}
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Đang thực hiện"
-              value={stats.inProgress}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Quá hạn"
-              value={stats.overdue}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
+    <div style={{ padding: 24 }}>
+      <Title level={2} style={{ color: isDarkMode ? '#fff' : '#222', marginBottom: 24 }}>Tổng Quan Dự Án</Title>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#223355' : '#f5faff' }}><Statistic title="Tổng Dự Án" value={projectStats.total} valueStyle={{ color: '#1890ff', fontWeight: 700 }} suffix={<ArrowUpOutlined />} /></Card></Col>
+        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#2d2d2d' : '#fffbe6' }}><Statistic title="Đang Tiến Hành" value={projectStats.inProgress} valueStyle={{ color: '#faad14', fontWeight: 700 }} suffix={<ClockCircleOutlined />} /></Card></Col>
+        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#1e3a2a' : '#f6ffed' }}><Statistic title="Hoàn Thành" value={projectStats.completed} valueStyle={{ color: '#52c41a', fontWeight: 700 }} suffix={<CheckCircleOutlined />} /></Card></Col>
+        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#3a2323' : '#fff1f0' }}><Statistic title="Trễ Hạn" value={projectStats.overdue} valueStyle={{ color: '#ff4d4f', fontWeight: 700 }} suffix={<CloseCircleOutlined />} /></Card></Col>
       </Row>
-
-      <Row gutter={[16, 16]}>
-        {/* My Tasks Progress */}
-        <Col xs={24} lg={12}>
-          <Card 
-            title="Tiến độ công việc của tôi" 
-            extra={
-              <Button type="link" onClick={() => navigate('/tasks')}>
-                Xem tất cả <ArrowRightOutlined />
-              </Button>
-            }
-          >
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <Text>Hoàn thành</Text>
-                <Text>{Math.round(completionRate)}%</Text>
-              </div>
-              <Progress 
-                percent={completionRate} 
-                status={completionRate === 100 ? 'success' : 'active'}
-                strokeColor={{
-                  '0%': '#108ee9',
-                  '100%': '#87d068',
-                }}
-              />
+      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+        <Col xs={24} md={12}>
+          <Card title={<span><ProjectOutlined /> Timeline Dự Án (Mini Gantt)</span>} bordered>
+            {/* Mini Gantt chart giả lập */}
+            <div style={{ marginBottom: 8 }}><b>Thiết Kế Nút Giao</b><div style={{ background: '#e6f7ff', borderRadius: 4, height: 8, width: '75%', margin: '4px 0' }} /></div>
+            <div style={{ marginBottom: 8 }}><b>Phân Tích Cầu Vượt</b><div style={{ background: '#fffbe6', borderRadius: 4, height: 8, width: '45%', margin: '4px 0' }} /></div>
+            <div style={{ marginBottom: 8 }}><b>Quy Hoạch Đô Thị</b><div style={{ background: '#fff1f0', borderRadius: 4, height: 8, width: '20%', margin: '4px 0' }} /></div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title={<span><ProjectOutlined /> Heatmap Hoạt Động Dự Án</span>} bordered>
+            {/* Heatmap giả lập */}
+            <div style={{ display: 'flex', alignItems: 'center', height: 80 }}>
+              {[...Array(7)].map((_, i) => (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {[...Array(5)].map((_, j) => (
+                    <div key={j} style={{ width: 16, height: 16, borderRadius: 4, margin: 2, background: `rgba(24, 144, 255, ${0.2 + 0.15 * j})` }} />
+                  ))}
+                  <div style={{ fontSize: 12, color: isDarkMode ? '#aaa' : '#888', marginTop: 2 }}>{['T2','T3','T4','T5','T6','T7','CN'][i]}</div>
+                </div>
+              ))}
+              <div style={{ marginLeft: 8, fontSize: 12, color: isDarkMode ? '#aaa' : '#888' }}>Nhiều</div>
             </div>
-            
-            <Table
-              columns={taskColumns}
-              dataSource={myTasks}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              locale={{
-                emptyText: 'Không có công việc nào được phân công'
-              }}
-            />
-          </Card>
-        </Col>
-
-        {/* Recent Tasks */}
-        <Col xs={24} lg={12}>
-          <Card 
-            title="Công việc gần đây" 
-            extra={
-              <Button type="link" onClick={() => navigate('/tasks')}>
-                Xem tất cả <ArrowRightOutlined />
-              </Button>
-            }
-          >
-            <Table
-              columns={taskColumns}
-              dataSource={recentTasks}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              locale={{
-                emptyText: 'Không có công việc nào'
-              }}
-            />
           </Card>
         </Col>
       </Row>
-
-      {/* Calendar */}
-      <Row style={{ marginTop: '24px' }}>
-        <Col span={24}>
-          <Card title="Lịch công việc">
-            <Calendar 
-              dateCellRender={dateCellRender}
-              style={{ backgroundColor: 'white' }}
-            />
+      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+        <Col xs={24} md={12}>
+          <Card title={<span><FileOutlined /> Phân Bổ Tài Liệu Theo Giai Đoạn CDE (ISO 19650)</span>} bordered>
+            {documentStats.labels && documentStats.labels.length > 0 ? (
+              <Pie data={documentStats} options={{ plugins: { legend: { position: 'bottom' } } }} height={220} />
+            ) : (
+              <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                Chưa có dữ liệu tài liệu
+              </div>
+            )}
           </Card>
         </Col>
-      </Row>
-
-      {/* Task Status Overview */}
-      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Chờ thực hiện"
-              value={stats.todo}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Đang xem xét"
-              value={stats.review}
-              valueStyle={{ color: '#fa8c16' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Hoàn thành"
-              value={stats.completed}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Tỷ lệ hoàn thành"
-              value={stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}
-              suffix="%"
-              valueStyle={{ color: '#722ed1' }}
-            />
+        <Col xs={24} md={12}>
+          <Card title={<span><CheckCircleOutlined /> Thống Kê Workflow Phê Duyệt</span>} bordered>
+            <Row gutter={16}>
+              <Col span={6}><Card style={{ background: isDarkMode ? '#2d2d2d' : '#fffbe6', textAlign: 'center' }}><div>Chờ duyệt</div><div style={{ fontSize: 24, color: '#faad14', fontWeight: 700 }}>12</div></Card></Col>
+              <Col span={6}><Card style={{ background: isDarkMode ? '#1e3a2a' : '#f6ffed', textAlign: 'center' }}><div>Đã duyệt</div><div style={{ fontSize: 24, color: '#52c41a', fontWeight: 700 }}>28</div></Card></Col>
+              <Col span={6}><Card style={{ background: isDarkMode ? '#3a2323' : '#fff1f0', textAlign: 'center' }}><div>Từ chối</div><div style={{ fontSize: 24, color: '#ff4d4f', fontWeight: 700 }}>3</div></Card></Col>
+              <Col span={6}><Card style={{ background: isDarkMode ? '#223355' : '#f0f5ff', textAlign: 'center' }}><div>Gửi lại</div><div style={{ fontSize: 24, color: '#1890ff', fontWeight: 700 }}>5</div></Card></Col>
+            </Row>
           </Card>
         </Col>
       </Row>

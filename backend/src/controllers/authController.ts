@@ -16,7 +16,9 @@ const prisma = new PrismaClient();
 export const register = async (req: Request, res: Response) => {
   try {
     console.log('Register request body:', req.body);
-    const { email, password, name, organization, role = 'USER', code, middleName, gender, dob, address } = req.body;
+    const { email, password, name, organization, code, middleName, gender, dob, address } = req.body;
+    // role luôn là 'USER' khi đăng ký mới
+    const role = 'USER';
     
     // Validate input
     if (!email || !password || !name) {

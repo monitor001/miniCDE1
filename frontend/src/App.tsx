@@ -23,6 +23,9 @@ import Users from './pages/Users';
 import UserDetail from './pages/UserDetail';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import Issues from './pages/Issues';
+import CalendarPage from './pages/CalendarPage';
+import Reports from './pages/Reports';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -73,6 +76,28 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   }
   
   console.log('Authentication valid, rendering protected route');
+  return <>{children}</>;
+};
+
+// Admin guard component
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const user = localStorage.getItem('user');
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  try {
+    const userData = JSON.parse(user);
+    if (userData.role !== 'ADMIN') {
+      console.log('User is not admin, redirecting to dashboard');
+      return <Navigate to="/" replace />;
+    }
+  } catch (error) {
+    console.log('Error parsing user data, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+  
   return <>{children}</>;
 };
 
@@ -137,10 +162,13 @@ const App: React.FC = () => {
                   <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
                   <Route path="/tasks/:id" element={<PrivateRoute><TaskDetail /></PrivateRoute>} />
                   
-                  <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
-                  <Route path="/users/:id" element={<PrivateRoute><UserDetail /></PrivateRoute>} />
+                  <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+                  <Route path="/users/:id" element={<AdminRoute><UserDetail /></AdminRoute>} />
                   
                   <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+                  <Route path="/issues" element={<PrivateRoute><Issues /></PrivateRoute>} />
+                  <Route path="/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
+                  <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
                 </Route>
 
                 {/* Not found */}

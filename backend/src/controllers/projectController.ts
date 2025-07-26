@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient, Role } from '@prisma/client';
 import { ApiError } from '../middlewares/errorHandler';
 import { ProjectMemberWithUser, Member } from '../types/global';
+import { logActivity } from '../utils/activityLogger';
 
 const prisma = new PrismaClient();
 
@@ -45,7 +46,7 @@ export const getProjects = async (req: Request, res: Response) => {
       };
     }
     
-    // Get projects with pagination
+    // Optimized query with selective includes and counts
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
         where,
@@ -59,8 +60,10 @@ export const getProjects = async (req: Request, res: Response) => {
           priority: true,
           createdAt: true,
           updatedAt: true,
+          // Optimize member selection - only get essential data
           members: {
-            include: {
+            select: {
+              role: true,
               user: {
                 select: {
                   id: true,
@@ -71,11 +74,13 @@ export const getProjects = async (req: Request, res: Response) => {
               }
             }
           },
+          // Use _count for better performance than counting related records
           _count: {
             select: {
               documents: true,
               tasks: true,
-              containers: true
+              containers: true,
+              notes: true
             }
           }
         },
@@ -109,74 +114,130 @@ export const getProjectById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    console.log('Getting project details for ID:', id);
-    console.log('User:', req.user);
+    // Check if user has access to this project
+    const projectAccess = await prisma.project.findFirst({
+      where: {
+        id,
+        OR: [
+          { members: { some: { userId: req.user?.id } } },
+          { /* Admin can access all projects */ }
+        ]
+      },
+      select: { id: true }
+    });
     
+    if (!projectAccess && req.user?.role !== 'ADMIN') {
+      throw new ApiError(403, 'You do not have access to this project');
+    }
+    
+    // Optimized query with selective includes
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
         members: {
-          include: {
+          select: {
+            role: true,
+            joinedAt: true,
             user: {
               select: {
                 id: true,
                 name: true,
                 email: true,
-                role: true
+                role: true,
+                organization: true
               }
             }
           }
         },
-        containers: true,
-        documents: true,
-        tasks: true,
+        documents: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            fileUrl: true,
+            fileSize: true,
+            fileType: true,
+            version: true,
+            status: true,
+            createdAt: true,
+            uploader: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50 // Limit recent documents
+        },
+        tasks: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            priority: true,
+            dueDate: true,
+            createdAt: true,
+            assignee: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50 // Limit recent tasks
+        },
+        containers: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            status: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        notes: {
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20 // Limit recent notes
+        },
         _count: {
           select: {
             documents: true,
             tasks: true,
-            containers: true
+            containers: true,
+            notes: true
           }
         }
       }
     });
     
-    console.log('Found project:', project ? 'yes' : 'no');
-    
     if (!project) {
       throw new ApiError(404, 'Project not found');
     }
     
-    // Check if user has access to this project
-    if (req.user?.role !== 'ADMIN') {
-      const isMember = project.members.some((member: ProjectMemberWithUser) => member.user.id === req.user?.id);
-      if (!isMember) {
-        throw new ApiError(403, 'You do not have access to this project');
-      }
-    }
-    
-    // Ensure all dates are properly formatted
-    const formattedProject = {
-      ...project,
-      startDate: project.startDate ? project.startDate.toISOString() : null,
-      endDate: project.endDate ? project.endDate.toISOString() : null,
-      createdAt: project.createdAt.toISOString(),
-      updatedAt: project.updatedAt.toISOString()
-    };
-    
-    console.log('Sending project details:', {
-      id: formattedProject.id,
-      name: formattedProject.name,
-      startDate: formattedProject.startDate,
-      endDate: formattedProject.endDate
-    });
-    
-    res.status(200).json(formattedProject);
+    res.status(200).json(project);
   } catch (error) {
-    console.error('Get project by ID error:', error);
-    
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ error: error.message });
     } else {
+      console.error('Get project by ID error:', error);
       res.status(500).json({ error: 'Failed to fetch project' });
     }
   }
@@ -297,6 +358,15 @@ export const createProject = async (req: Request, res: Response) => {
       createdBy: req.user?.id
     });
     
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'create',
+      objectType: 'project',
+      objectId: project.id,
+      description: `Tạo dự án "${project.name}"`
+    });
+    
   res.status(201).json(project);
   } catch (error) {
     if (error instanceof ApiError) {
@@ -315,7 +385,7 @@ export const createProject = async (req: Request, res: Response) => {
 export const updateProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, status, startDate, endDate, priority } = req.body;
+    const { name, description, status, startDate, endDate, priority, members } = req.body;
     
     // Check if project exists
     const existingProject = await prisma.project.findUnique({
@@ -341,7 +411,46 @@ export const updateProject = async (req: Request, res: Response) => {
         throw new ApiError(403, 'You do not have permission to update this project');
       }
     }
-    
+
+    // --- Cập nhật thành viên dự án ---
+    if (Array.isArray(members)) {
+      // Lấy danh sách userId hiện tại
+      const currentMembers = existingProject.members.map((m: any) => m.userId);
+      const newMembers = members.map((m: any) => m.userId);
+
+      // Xoá các thành viên không còn trong danh sách mới
+      const toRemove = currentMembers.filter((userId: string) => !newMembers.includes(userId));
+      await prisma.projectMember.deleteMany({
+        where: {
+          projectId: id,
+          userId: { in: toRemove }
+        }
+      });
+
+      // Thêm mới các thành viên chưa có
+      const toAdd = members.filter((m: any) => !currentMembers.includes(m.userId));
+      await prisma.projectMember.createMany({
+        data: toAdd.map((m: any) => ({
+          projectId: id,
+          userId: m.userId,
+          role: m.role
+        })),
+        skipDuplicates: true
+      });
+
+      // Cập nhật role cho các thành viên đã có nếu thay đổi
+      for (const m of members) {
+        const existing = existingProject.members.find((em: any) => em.userId === m.userId);
+        if (existing && existing.role !== m.role) {
+          await prisma.projectMember.update({
+            where: { id: existing.id },
+            data: { role: m.role }
+          });
+        }
+      }
+    }
+    // --- End cập nhật thành viên ---
+
     // Update project
     const updatedProject = await prisma.project.update({
       where: { id },
@@ -374,6 +483,15 @@ export const updateProject = async (req: Request, res: Response) => {
       id: updatedProject.id,
       name: updatedProject.name,
       updatedBy: req.user?.id
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'update',
+      objectType: 'project',
+      objectId: updatedProject.id,
+      description: `Cập nhật dự án "${updatedProject.name}"`
     });
     
     res.status(200).json(updatedProject);
@@ -474,7 +592,30 @@ export const deleteProject = async (req: Request, res: Response) => {
     await prisma.projectMember.deleteMany({
       where: { projectId: id }
     });
-    
+
+    // Delete project notes
+    await prisma.projectNote.deleteMany({
+      where: { projectId: id }
+    });
+
+    // Delete issues
+    await prisma.issue.deleteMany({
+      where: { projectId: id }
+    });
+
+    // Delete calendar events
+    await prisma.calendarEvent.deleteMany({
+      where: { projectId: id }
+    });
+
+    // Delete activity logs liên quan đến project
+    await prisma.activityLog.deleteMany({
+      where: {
+        objectId: id,
+        objectType: 'project'
+      }
+    });
+
     // Finally delete the project
     console.log('Deleting project itself:', id);
     await prisma.project.delete({
@@ -486,6 +627,15 @@ export const deleteProject = async (req: Request, res: Response) => {
       id,
       name: existingProject.name,
       deletedBy: req.user?.id
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'delete',
+      objectType: 'project',
+      objectId: id,
+      description: `Xóa dự án "${existingProject.name}"`
     });
     
     console.log('Project deleted successfully:', id);
@@ -810,39 +960,22 @@ export const getProjectNotes = async (req: Request, res: Response) => {
       }
     }
     
-    // Get notes with user details
-    const notes = await prisma.$queryRaw`
-      SELECT 
-        pn.id, 
-        pn.content, 
-        pn."projectId", 
-        pn."userId", 
-        pn."createdAt", 
-        pn."updatedAt",
-        u.name as "userName", 
-        u.email as "userEmail",
-        u.id as "userId"
-      FROM "ProjectNote" pn
-      JOIN "User" u ON u.id = pn."userId"
-      WHERE pn."projectId" = ${id}
-      ORDER BY pn."createdAt" DESC
-    `;
+    // Get notes with user details using Prisma
+    const notes = await prisma.projectNote.findMany({
+      where: { projectId: id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
     
-    // Format the notes for the response
-    const formattedNotes = Array.isArray(notes) ? notes.map((note: any) => ({
-      id: note.id,
-      content: note.content,
-      projectId: note.projectId,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt,
-      user: {
-        id: note.userId,
-        name: note.userName,
-        email: note.userEmail
-      }
-    })) : [];
-    
-    res.status(200).json(formattedNotes);
+    res.status(200).json(notes);
   } catch (error) {
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ error: error.message });
@@ -892,62 +1025,45 @@ export const createProjectNote = async (req: Request, res: Response) => {
       }
     }
     
-    // Create note using raw SQL since the ProjectNote model might not be generated yet
-    const note = await prisma.$executeRaw`
-      INSERT INTO "ProjectNote" (id, content, "projectId", "userId", "createdAt", "updatedAt")
-      VALUES (gen_random_uuid(), ${content}, ${id}, ${req.user?.id}, now(), now())
-      RETURNING id, content, "projectId", "userId", "createdAt", "updatedAt"
-    `;
-    
-    // Get the created note with user details
-    const createdNote = await prisma.$queryRaw`
-      SELECT 
-        pn.id, 
-        pn.content, 
-        pn."projectId", 
-        pn."userId", 
-        pn."createdAt", 
-        pn."updatedAt",
-        u.name as "userName", 
-        u.email as "userEmail"
-      FROM "ProjectNote" pn
-      JOIN "User" u ON u.id = pn."userId"
-      WHERE pn."projectId" = ${id}
-      ORDER BY pn."createdAt" DESC
-      LIMIT 1
-    `;
-    
-    const noteData = Array.isArray(createdNote) && createdNote.length > 0 ? {
-      id: createdNote[0].id,
-      content: createdNote[0].content,
-      projectId: createdNote[0].projectId,
-      createdAt: createdNote[0].createdAt,
-      updatedAt: createdNote[0].updatedAt,
-      user: {
-        id: createdNote[0].userId,
-        name: createdNote[0].userName,
-        email: createdNote[0].userEmail
+    // Create note using Prisma
+    const note = await prisma.projectNote.create({
+      data: {
+        content: content.trim(),
+        projectId: id,
+        userId: req.user?.id as string
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
       }
-    } : {
-      content,
-      projectId: id,
-      userId: req.user?.id,
-      createdAt: new Date(),
-      user: {
-        id: req.user?.id,
-        name: req.user ? (req.user as any).name || 'Unknown' : 'Unknown',
-        email: req.user ? req.user.email || 'unknown@example.com' : 'unknown@example.com'
-      }
-    };
+    });
     
     // Notify note creation via Socket.IO
     global.io.to(`project:${id}`).emit('project:note:created', {
       projectId: id,
-      note: noteData,
+      note: {
+        id: note.id,
+        content: note.content,
+        user: note.user
+      },
       createdBy: req.user?.id
     });
     
-    res.status(201).json(noteData);
+    // Log activity
+    await logActivity({
+      userId: req.user?.id as string,
+      action: 'comment',
+      objectType: 'project',
+      objectId: id,
+      description: `Thêm ghi chú cho dự án "${project.name}"`
+    });
+    
+    res.status(201).json(note);
   } catch (error) {
     console.error('Create project note error:', error);
     
@@ -979,12 +1095,12 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
       throw new ApiError(404, 'Project not found');
     }
     
-    // Check if note exists using raw query
-    const note = await prisma.$queryRaw`
-      SELECT * FROM "ProjectNote" WHERE id = ${noteId} AND "projectId" = ${id}
-    `;
+    // Check if note exists using Prisma
+    const note = await prisma.projectNote.findUnique({
+      where: { id: noteId }
+    });
     
-    if (!Array.isArray(note) || note.length === 0) {
+    if (!note || note.projectId !== id) {
       throw new ApiError(404, 'Note not found in this project');
     }
     
@@ -995,14 +1111,16 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
         member.userId === req.user?.id && 
         ['PROJECT_MANAGER', 'BIM_MANAGER'].includes(member.role)
       ) ||
-      note[0].userId === req.user?.id;
+      note.userId === req.user?.id;
     
     if (!hasPermission) {
       throw new ApiError(403, 'You do not have permission to delete this note');
     }
     
-    // Delete note using raw SQL
-    await prisma.$executeRaw`DELETE FROM "ProjectNote" WHERE id = ${noteId}`;
+    // Delete note using Prisma
+    await prisma.projectNote.delete({
+      where: { id: noteId }
+    });
     
     // Notify note deletion via Socket.IO
     global.io.to(`project:${id}`).emit('project:note:deleted', {
