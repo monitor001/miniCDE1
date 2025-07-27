@@ -359,13 +359,16 @@ export const createProject = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'create',
-      objectType: 'project',
-      objectId: project.id,
-      description: `Tạo dự án "${project.name}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'create',
+        objectType: 'project',
+        objectId: project.id,
+        description: `Tạo dự án mới: "${project.name}"`,
+        notify: true
+      });
+    }
     
   res.status(201).json(project);
   } catch (error) {
@@ -486,13 +489,15 @@ export const updateProject = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'update',
-      objectType: 'project',
-      objectId: updatedProject.id,
-      description: `Cập nhật dự án "${updatedProject.name}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'update',
+        objectType: 'project',
+        objectId: updatedProject.id,
+        description: `Cập nhật dự án "${updatedProject.name}"`
+      });
+    }
     
     res.status(200).json(updatedProject);
   } catch (error) {
@@ -560,7 +565,7 @@ export const deleteProject = async (req: Request, res: Response) => {
       
       // Delete comments
       await prisma.comment.deleteMany({
-        where: { taskId: { in: taskIds } }
+        where: { projectId: { in: taskIds } }
       });
       
       // Delete task-document relationships
@@ -630,13 +635,15 @@ export const deleteProject = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'delete',
-      objectType: 'project',
-      objectId: id,
-      description: `Xóa dự án "${existingProject.name}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'delete',
+        objectType: 'project',
+        objectId: id,
+        description: `Xóa dự án "${existingProject.name}"`
+      });
+    }
     
     console.log('Project deleted successfully:', id);
     res.status(200).json({ message: 'Project deleted successfully' });
@@ -993,12 +1000,15 @@ export const getProjectNotes = async (req: Request, res: Response) => {
 export const createProjectNote = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { title, content } = req.body;
     
     console.log('Creating note for project:', id);
     console.log('Note content:', content);
     console.log('User:', req.user);
     
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      throw new ApiError(400, 'Note title is required');
+    }
     if (!content || typeof content !== 'string' || content.trim() === '') {
       throw new ApiError(400, 'Note content is required');
     }
@@ -1028,6 +1038,7 @@ export const createProjectNote = async (req: Request, res: Response) => {
     // Create note using Prisma
     const note = await prisma.projectNote.create({
       data: {
+        title: title.trim(),
         content: content.trim(),
         projectId: id,
         userId: req.user?.id as string
@@ -1055,13 +1066,15 @@ export const createProjectNote = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'comment',
-      objectType: 'project',
-      objectId: id,
-      description: `Thêm ghi chú cho dự án "${project.name}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'comment',
+        objectType: 'project',
+        objectId: id,
+        description: `Thêm ghi chú cho dự án "${project.name}"`
+      });
+    }
     
     res.status(201).json(note);
   } catch (error) {
@@ -1071,6 +1084,103 @@ export const createProjectNote = async (req: Request, res: Response) => {
       res.status(error.statusCode).json({ error: error.message });
     } else {
       res.status(500).json({ error: 'Failed to create project note' });
+    }
+  }
+};
+
+/**
+ * Update project note
+ * @route PUT /api/projects/:id/notes/:noteId
+ */
+export const updateProjectNote = async (req: Request, res: Response) => {
+  try {
+    const { id, noteId } = req.params;
+    const { title, content } = req.body;
+    
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      throw new ApiError(400, 'Note title is required');
+    }
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      throw new ApiError(400, 'Note content is required');
+    }
+    
+    // Check if project exists
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        members: true
+      }
+    });
+    
+    if (!project) {
+      throw new ApiError(404, 'Project not found');
+    }
+    
+    // Check if user has access to this project
+    if (req.user?.role !== 'ADMIN') {
+      const isMember = project.members.some((member: any) => 
+        member.userId === req.user?.id
+      );
+      if (!isMember) {
+        throw new ApiError(403, 'You do not have access to this project');
+      }
+    }
+    
+    // Check if note exists using Prisma
+    const note = await prisma.projectNote.findUnique({
+      where: { id: noteId }
+    });
+    
+    if (!note || note.projectId !== id) {
+      throw new ApiError(404, 'Note not found in this project');
+    }
+    
+    // Check if user has permission (admin, project manager, or note creator)
+    const hasPermission = 
+      req.user?.role === 'ADMIN' ||
+      project.members.some((member: any) => 
+        member.userId === req.user?.id && 
+        ['PROJECT_MANAGER', 'BIM_MANAGER'].includes(member.role)
+      ) ||
+      note.userId === req.user?.id;
+    
+    if (!hasPermission) {
+      throw new ApiError(403, 'You do not have permission to update this note');
+    }
+    
+    // Update note using Prisma
+    const updatedNote = await prisma.projectNote.update({
+      where: { id: noteId },
+      data: {
+        title: title.trim(),
+        content: content.trim(),
+        updatedAt: new Date()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    // Notify note update via Socket.IO
+    global.io.to(`project:${id}`).emit('project:note:updated', {
+      projectId: id,
+      note: updatedNote,
+      updatedBy: req.user?.id
+    });
+    
+    res.status(200).json(updatedNote);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Update project note error:', error);
+      res.status(500).json({ error: 'Failed to update project note' });
     }
   }
 };
@@ -1290,6 +1400,491 @@ export const deleteProjectImage = async (req: Request, res: Response) => {
     } else {
       console.error('Delete project image error:', error);
       res.status(500).json({ error: 'Failed to delete image' });
+    }
+  }
+}; 
+
+/**
+ * Get project comments
+ * @route GET /api/projects/:id/comments
+ */
+export const getProjectComments = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const comments = await prisma.comment.findMany({
+      where: { projectId: id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    res.status(200).json(comments);
+  } catch (error) {
+    console.error('Error fetching project comments:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Create project comment
+ * @route POST /api/projects/:id/comments
+ */
+export const createProjectComment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+    
+    const comment = await prisma.comment.create({
+      data: {
+        content: content.trim(),
+        projectId: id,
+        userId: req.user!.id
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user!.id,
+      action: 'COMMENT_CREATED',
+      objectType: 'PROJECT',
+      objectId: id,
+      description: `Added comment to project`
+    });
+    
+    res.status(201).json(comment);
+  } catch (error) {
+    console.error('Error creating project comment:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Delete project comment
+ * @route DELETE /api/projects/:id/comments/:commentId
+ */
+export const deleteProjectComment = async (req: Request, res: Response) => {
+  try {
+    const { id, commentId } = req.params;
+    
+    // Check if comment exists and user has permission to delete
+    const comment = await prisma.comment.findUnique({
+      where: { id: commentId },
+      include: { project: true }
+    });
+    
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    
+    // Only comment author or project admin can delete
+    if (comment.userId !== req.user!.id && req.user!.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+    
+    await prisma.comment.delete({
+      where: { id: commentId }
+    });
+    
+    // Log activity
+    await logActivity({
+      userId: req.user!.id,
+      action: 'COMMENT_DELETED',
+      objectType: 'PROJECT',
+      objectId: id,
+      description: `Deleted comment from project`
+    });
+    
+    res.status(200).json({ message: 'Comment deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting project comment:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}; 
+
+/**
+ * Get project statistics
+ * @route GET /api/projects/:id/stats
+ */
+export const getProjectStats = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Get project
+    const project = await prisma.project.findUnique({
+      where: { id }
+    });
+
+    if (!project) {
+      throw new ApiError(404, 'Dự án không tồn tại');
+    }
+
+    // Get counts
+    const [taskCount, documentCount, memberCount, containerCount, noteCount, commentCount] = await Promise.all([
+      prisma.task.count({ where: { projectId: id } }),
+      prisma.document.count({ where: { projectId: id } }),
+      prisma.projectMember.count({ where: { projectId: id } }),
+      prisma.container.count({ where: { projectId: id } }),
+      prisma.projectNote.count({ where: { projectId: id } }),
+      prisma.comment.count({ where: { projectId: id } })
+    ]);
+
+    // Get task statistics
+    const taskStats = await prisma.task.groupBy({
+      by: ['status'],
+      where: { projectId: id },
+      _count: { status: true }
+    });
+
+    const completedTasks = taskStats.find(stat => stat.status === 'COMPLETED')?._count.status || 0;
+    const totalTasks = taskCount;
+
+    // Get recent activity
+    const recentActivity = await prisma.activityLog.findMany({
+      where: { objectType: 'project', objectId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Get project timeline
+    const timeline = await prisma.activityLog.findMany({
+      where: { objectType: 'project', objectId: id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        action: true,
+        createdAt: true,
+        description: true
+      }
+    });
+
+    res.status(200).json({
+      projectId: id,
+      totalTasks,
+      completedTasks,
+      totalDocuments: documentCount,
+      totalMembers: memberCount,
+      totalContainers: containerCount,
+      totalNotes: noteCount,
+      totalComments: commentCount,
+      progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      recentActivity,
+      timeline
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      console.error('Error getting project stats:', error);
+      res.status(500).json({ message: 'Lỗi server' });
+    }
+  }
+};
+
+/**
+ * Export project data
+ * @route GET /api/projects/:id/export
+ */
+export const exportProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { format = 'xlsx' } = req.query;
+
+    // Get project with all related data
+    const [project, members, tasks, documents, containers, notes, comments] = await Promise.all([
+      prisma.project.findUnique({ where: { id } }),
+      prisma.projectMember.findMany({
+        where: { projectId: id },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true }
+          }
+        }
+      }),
+      prisma.task.findMany({
+        where: { projectId: id },
+        include: {
+          assignee: {
+            select: { id: true, name: true, email: true }
+          }
+        }
+      }),
+      prisma.document.findMany({ where: { projectId: id } }),
+      prisma.container.findMany({ where: { projectId: id } }),
+      prisma.projectNote.findMany({
+        where: { projectId: id },
+        include: {
+          user: {
+            select: { id: true, name: true }
+          }
+        }
+      }),
+      prisma.comment.findMany({
+        where: { projectId: id },
+        include: {
+          user: {
+            select: { id: true, name: true }
+          }
+        }
+      })
+    ]);
+
+    if (!project) {
+      throw new ApiError(404, 'Dự án không tồn tại');
+    }
+
+    // Log export activity
+    await logActivity({
+      userId: req.user?.id!,
+      action: 'EXPORT_PROJECT',
+      objectType: 'project',
+      objectId: id,
+      description: `Xuất dự án ${project.name} định dạng ${format}`
+    });
+
+    // Prepare data for export
+    const exportData = {
+      project: {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        priority: project.priority,
+        startDate: project.startDate,
+        endDate: project.endDate,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt
+      },
+      members: members.map(member => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        role: member.user.role,
+        projectRole: member.role,
+        joinedAt: member.joinedAt
+      })),
+      tasks: tasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        assignedTo: task.assignee?.name || 'Chưa phân công',
+        dueDate: task.dueDate,
+        createdAt: task.createdAt
+      })),
+      documents: documents.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        url: doc.fileUrl,
+        type: doc.fileType,
+        size: doc.fileSize,
+        uploadedBy: doc.uploaderId,
+        createdAt: doc.createdAt
+      })),
+      containers: containers.map(container => ({
+        id: container.id,
+        name: container.name,
+        code: container.code,
+        status: container.status,
+        createdAt: container.createdAt
+      })),
+      notes: notes.map(note => ({
+        id: note.id,
+        content: note.content,
+        author: note.user.name,
+        createdAt: note.createdAt
+      })),
+      comments: comments.map(comment => ({
+        id: comment.id,
+        content: comment.content,
+        author: comment.user?.name || 'Unknown',
+        createdAt: comment.createdAt
+      }))
+    };
+
+    // Generate export based on format
+    let fileName = `${project.name}_export_${new Date().toISOString().split('T')[0]}`;
+    let contentType = 'application/json';
+    let data = JSON.stringify(exportData, null, 2);
+
+    if (format === 'xlsx') {
+      // For now, return JSON. In production, you'd use a library like exceljs
+      fileName += '.json';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(data);
+    } else if (format === 'pdf') {
+      // For now, return JSON. In production, you'd use a library like puppeteer
+      fileName += '.json';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(data);
+    } else if (format === 'docx') {
+      // For now, return JSON. In production, you'd use a library like docx
+      fileName += '.json';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(data);
+    } else {
+      fileName += '.json';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(data);
+    }
+
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      console.error('Error exporting project:', error);
+      res.status(500).json({ message: 'Lỗi server' });
+    }
+  }
+};
+
+/**
+ * Share project
+ * @route POST /api/projects/:id/share
+ */
+export const shareProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { email, message } = req.body;
+
+    // Validate email
+    if (!email || !email.includes('@')) {
+      throw new ApiError(400, 'Email không hợp lệ');
+    }
+
+    // Get project
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true, name: true, description: true }
+    });
+
+    if (!project) {
+      throw new ApiError(404, 'Dự án không tồn tại');
+    }
+
+    // Check if user has permission to share
+    const projectMember = await prisma.projectMember.findFirst({
+      where: {
+        projectId: id,
+        userId: req.user?.id
+      }
+    });
+
+    if (!projectMember && req.user?.role !== 'ADMIN') {
+      throw new ApiError(403, 'Không có quyền chia sẻ dự án này');
+    }
+
+    // Create share record - for now, just return success
+    // In production, you would create a share record in the database
+    const shareRecord = {
+      id: 'temp-share-id',
+      projectId: id,
+      sharedBy: req.user?.id!,
+      sharedWith: email,
+      message: message || '',
+      status: 'PENDING'
+    };
+
+    // Log share activity
+    await logActivity({
+      userId: req.user?.id!,
+      action: 'SHARE_PROJECT',
+      objectType: 'project',
+      objectId: id,
+      description: `Chia sẻ dự án ${project.name} với ${email}`
+    });
+
+    // In production, you would send an email here
+    // For now, we'll just return success
+    res.status(200).json({
+      message: 'Dự án đã được chia sẻ thành công',
+      shareId: shareRecord.id,
+      sharedWith: email
+    });
+
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      console.error('Error sharing project:', error);
+      res.status(500).json({ message: 'Lỗi server' });
+    }
+  }
+};
+
+/**
+ * Get project shares
+ * @route GET /api/projects/:id/shares
+ */
+export const getProjectShares = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // For now, return empty shares array
+    // In production, you would query the ProjectShare table
+    res.status(200).json({ shares: [] });
+  } catch (error) {
+    console.error('Error getting project shares:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+/**
+ * Revoke project share
+ * @route DELETE /api/projects/:id/shares/:shareId
+ */
+export const revokeProjectShare = async (req: Request, res: Response) => {
+  try {
+    const { id, shareId } = req.params;
+
+    // For now, just return success
+    // In production, you would delete from ProjectShare table
+
+    // Log revoke activity
+    await logActivity({
+      userId: req.user?.id!,
+      action: 'REVOKE_SHARE',
+      objectType: 'project',
+      objectId: id,
+      description: `Thu hồi chia sẻ dự án`
+    });
+
+    res.status(200).json({ message: 'Đã thu hồi chia sẻ thành công' });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      console.error('Error revoking project share:', error);
+      res.status(500).json({ message: 'Lỗi server' });
     }
   }
 }; 

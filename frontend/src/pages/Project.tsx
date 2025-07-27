@@ -1,5 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, DatePicker, Select, message, Card, List, Upload, Space, Popconfirm, Drawer, Typography, Row, Col, Tag, Radio, Tabs, Badge, Avatar, Tooltip, Mentions } from 'antd';
+import { 
+  Table, 
+  Button, 
+  Modal, 
+  Form, 
+  Input, 
+  DatePicker, 
+  Select, 
+  message, 
+  Card, 
+  List, 
+  Upload, 
+  Space, 
+  Popconfirm, 
+  Drawer, 
+  Typography, 
+  Row, 
+  Col, 
+  Tag, 
+  Radio, 
+  Tabs, 
+  Badge, 
+  Avatar, 
+  Tooltip, 
+  Mentions,
+  Statistic,
+  Divider
+} from 'antd';
+import ProjectCard from '../components/ProjectCard';
 import axiosInstance from '../axiosConfig';
 import moment from 'moment';
 import { 
@@ -13,14 +41,23 @@ import {
   ExclamationCircleOutlined, 
   CloseCircleOutlined, 
   MessageOutlined, 
-  UserOutlined
+  UserOutlined,
+  FolderOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  ClearOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
 import io from 'socket.io-client';
 import debounce from 'lodash.debounce';
 
 const { Option } = Select;
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 
@@ -60,6 +97,101 @@ const Project: React.FC = () => {
   const [projectComments, setProjectComments] = useState<{ [key: string]: any[] }>({});
   const [projectCommentsLoading, setProjectCommentsLoading] = useState<{ [key: string]: boolean }>({});
 
+  // Mock data for demonstration
+  const mockProjects = [
+    {
+      id: '1',
+      name: 'Dự án Cầu Vượt',
+      description: 'Xây dựng cầu vượt tại ngã tư sầm uất',
+      status: 'ACTIVE',
+      priority: 'HIGH',
+      startDate: '2024-01-15',
+      endDate: '2024-12-31',
+      progress: 65,
+      manager: 'Trần Thị B',
+      teamSize: 12,
+      documents: 45,
+      tasks: 28,
+      issues: 5,
+      members: [
+        { id: '1', userId: '1', userName: 'Trần Thị B', userEmail: 'tranthib@company.com', role: 'OWNER', joinedAt: '2024-01-15', status: 'ACTIVE' },
+        { id: '2', userId: '2', userName: 'Nguyễn Văn A', userEmail: 'nguyenvana@company.com', role: 'MANAGER', joinedAt: '2024-01-16', status: 'ACTIVE' }
+      ]
+    },
+    {
+      id: '2',
+      name: 'Dự án Hạ Tầng ABC',
+      description: 'Nâng cấp hạ tầng giao thông khu vực ABC',
+      status: 'PLANNING',
+      priority: 'MEDIUM',
+      startDate: '2024-03-01',
+      endDate: '2025-06-30',
+      progress: 25,
+      manager: 'Lê Văn C',
+      teamSize: 8,
+      documents: 23,
+      tasks: 15,
+      issues: 2,
+      members: [
+        { id: '3', userId: '3', userName: 'Lê Văn C', userEmail: 'levanc@company.com', role: 'OWNER', joinedAt: '2024-03-01', status: 'ACTIVE' }
+      ]
+    },
+    {
+      id: '3',
+      name: 'Dự án Tòa Nhà Văn Phòng',
+      description: 'Thiết kế và xây dựng tòa nhà văn phòng cao tầng',
+      status: 'ON_HOLD',
+      priority: 'LOW',
+      startDate: '2024-02-01',
+      endDate: '2025-03-31',
+      progress: 40,
+      manager: 'Nguyễn Văn A',
+      teamSize: 15,
+      documents: 67,
+      tasks: 42,
+      issues: 8,
+      members: [
+        { id: '4', userId: '1', userName: 'Nguyễn Văn A', userEmail: 'nguyenvana@company.com', role: 'OWNER', joinedAt: '2024-02-01', status: 'ACTIVE' }
+      ]
+    },
+    {
+      id: '4',
+      name: 'Dự án Cải Tạo Đường',
+      description: 'Cải tạo và mở rộng đường giao thông chính',
+      status: 'COMPLETED',
+      priority: 'MEDIUM',
+      startDate: '2023-06-01',
+      endDate: '2024-01-31',
+      progress: 100,
+      manager: 'Phạm Thị D',
+      teamSize: 10,
+      documents: 34,
+      tasks: 20,
+      issues: 3,
+      members: [
+        { id: '5', userId: '4', userName: 'Phạm Thị D', userEmail: 'phamthid@company.com', role: 'OWNER', joinedAt: '2023-06-01', status: 'ACTIVE' }
+      ]
+    },
+    {
+      id: '5',
+      name: 'Dự án Công Viên',
+      description: 'Thiết kế và xây dựng công viên giải trí',
+      status: 'ACTIVE',
+      priority: 'LOW',
+      startDate: '2024-04-01',
+      endDate: '2024-10-31',
+      progress: 30,
+      manager: 'Hoàng Văn E',
+      teamSize: 6,
+      documents: 18,
+      tasks: 12,
+      issues: 1,
+      members: [
+        { id: '6', userId: '5', userName: 'Hoàng Văn E', userEmail: 'hoangvane@company.com', role: 'OWNER', joinedAt: '2024-04-01', status: 'ACTIVE' }
+      ]
+    }
+  ];
+  
   // Kiểm tra authentication khi component mount
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -1071,113 +1203,14 @@ const Project: React.FC = () => {
   const renderProjectCards = () => {
     return getFilteredProjects().map(project => (
       <Col xs={24} sm={12} md={8} lg={6} key={project.id}>
-        <div style={{ position: 'relative', marginBottom: '16px' }}>
-          {/* Hiển thị thẻ ưu tiên phía trên bên trái */}
-          <Tag
-            style={{
-              position: 'absolute',
-              top: '-10px',
-              left: '16px',
-              zIndex: 1
-            }}
-            color={getPriorityColor(project.priority)}
-          >
-            {getPriorityLabel(project.priority)}
-          </Tag>
-          
-          {/* Hiển thị thẻ trạng thái phía trên bên phải */}
-          <Tag
-            style={{
-              position: 'absolute',
-              top: '-10px',
-              right: '16px',
-              zIndex: 1
-            }}
-            icon={getStatusIcon(project.status)}
-            color={
-              project.status === 'ACTIVE' ? 'blue' :
-              project.status === 'COMPLETED' ? 'green' :
-              project.status === 'ON_HOLD' ? 'gold' :
-              project.status === 'CANCELLED' ? 'red' : 'default'
-            }
-          >
-            {getStatusLabel(project.status)}
-          </Tag>
-          
-          <Card
-            hoverable
-            title={project.name}
-            extra={
-              <Tag color={getPriorityColor(project.priority)}>
-                {priorityLevels.find(p => p.value === project.priority)?.label || 'Không'}
-              </Tag>
-            }
-            actions={[
-              <Button type="link" onClick={() => showDetail(project)} key="detail">Chi tiết</Button>,
-              <Button type="link" onClick={() => handleEdit(project)} key="edit">Sửa</Button>,
-              <Popconfirm
-                title="Xóa dự án này?"
-                onConfirm={() => handleDelete(project.id)}
-                okText="Có"
-                cancelText="Không"
-                key="delete"
-              >
-                <Button type="link" danger>Xóa</Button>
-              </Popconfirm>
-            ]}
-            style={{
-              borderRadius: 16,
-              boxShadow: isDarkMode
-                ? '0 4px 24px 0 rgba(0,0,0,0.35), 0 1.5px 6px 0 rgba(0,0,0,0.18)'
-                : '0 4px 24px 0 rgba(24, 144, 255, 0.10), 0 1.5px 6px 0 rgba(0,0,0,0.06)',
-              border: `2px solid ${
-                project.status === 'ACTIVE' ? (isDarkMode ? '#177ddc' : '#1890ff') :
-                project.status === 'COMPLETED' ? (isDarkMode ? '#49aa19' : '#52c41a') :
-                project.status === 'ON_HOLD' ? (isDarkMode ? '#d89614' : '#faad14') :
-                project.status === 'CANCELLED' ? (isDarkMode ? '#a61d24' : '#ff4d4f') :
-                (isDarkMode ? '#434343' : '#e4e4e4')
-              }`,
-              transition: 'transform 0.2s cubic-bezier(.4,2,.6,1), box-shadow 0.2s',
-              padding: 16
-            }}
-            bodyStyle={{
-              borderRadius: 16,
-              minHeight: 120,
-              background: isDarkMode ? '#141414' : '#fafdff',
-              transition: 'background 0.2s'
-            }}
-            className="project-card-highlight"
-          >
-            <div style={{ marginBottom: 8 }}>
-              <CalendarOutlined style={{ marginRight: 8 }} />
-              <span>
-                {renderDate(project.startDate)}
-                {' → '}
-                {renderDate(project.endDate)}
-              </span>
-            </div>
-            
-            <div style={{ marginBottom: 8 }}>
-              <TeamOutlined style={{ marginRight: 8 }} />
-              <span>
-                {project.members && Array.isArray(project.members) && project.members.length > 0
-                  ? `${project.members.length} thành viên`
-                  : 'Chưa có thành viên'
-                }
-              </span>
-            </div>
-            
-            {project._count && (
-              <div>
-                <FileOutlined style={{ marginRight: 8 }} />
-                <span>
-                  {project._count.documents || 0} tài liệu, {project._count.tasks || 0} công việc
-                </span>
-              </div>
-            )}
-            {renderProjectContent(project)}
-          </Card>
-        </div>
+        <ProjectCard
+          project={project}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onView={showDetail}
+          onRefresh={fetchProjects}
+          isDarkMode={isDarkMode}
+        />
       </Col>
     ));
   };

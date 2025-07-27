@@ -1,94 +1,254 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Typography, List, Avatar } from 'antd';
-import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, ProjectOutlined, ArrowUpOutlined, UploadOutlined, DownloadOutlined, EyeOutlined, CommentOutlined, FileOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Typography, List, Avatar, Progress, Tag, Calendar, Badge, Spin, Alert, Drawer, Button, Input, message } from 'antd';
+import { 
+  CheckCircleOutlined, 
+  ClockCircleOutlined, 
+  CloseCircleOutlined, 
+  ProjectOutlined, 
+  ArrowUpOutlined, 
+  UploadOutlined, 
+  DownloadOutlined, 
+  EyeOutlined, 
+  CommentOutlined, 
+  FileOutlined,
+  UserOutlined,
+  ExclamationCircleOutlined,
+  CalendarOutlined,
+  BarChartOutlined,
+  PieChartOutlined,
+  LineChartOutlined
+} from '@ant-design/icons';
 import axiosInstance from '../axiosConfig';
 import moment from 'moment';
 import io from 'socket.io-client';
-import { Bar, Pie } from 'react-chartjs-2';
+import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2';
 import 'chart.js/auto';
 import { useSelector } from 'react-redux';
 
 const { Title, Text } = Typography;
 
+interface DashboardStats {
+  totalProjects: number;
+  totalTasks: number;
+  totalDocuments: number;
+  totalUsers: number;
+  pendingApprovals: number;
+  completedApprovals: number;
+  rejectedApprovals: number;
+  overdueTasks: number;
+}
+
+interface ProjectData {
+  id: string;
+  name: string;
+  status: string;
+  progress: number;
+  totalTasks: number;
+  completedTasks: number;
+  updatedAt: string;
+}
+
+interface ActivityData {
+  id: string;
+  action: string;
+  description: string;
+  createdAt: string;
+  user: {
+    name: string;
+    email: string;
+  };
+}
+
+interface TaskByProject {
+  projectName: string;
+  high: number;
+  medium: number;
+  low: number;
+  none: number;
+}
+
+interface IssueByProject {
+  projectName: string;
+  high: number;
+  medium: number;
+  low: number;
+  none: number;
+}
+
+interface DocumentByProject {
+  projectName: string;
+  published: number;
+  shared: number;
+  wip: number;
+  archived: number;
+}
+
+interface EventByProject {
+  projectName: string;
+  todayEvents: number;
+}
+
 const Dashboard: React.FC = () => {
-  const [projectStats, setProjectStats] = useState({ total: 0, inProgress: 0, completed: 0, overdue: 0 });
-  const [activities, setActivities] = useState<any[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalProjects: 0,
+    totalTasks: 0,
+    totalDocuments: 0,
+    totalUsers: 0,
+    pendingApprovals: 0,
+    completedApprovals: 0,
+    rejectedApprovals: 0,
+    overdueTasks: 0
+  });
+  const [recentActivities, setRecentActivities] = useState<ActivityData[]>([]);
+  const [recentProjects, setRecentProjects] = useState<ProjectData[]>([]);
+  const [taskByProjectData, setTaskByProjectData] = useState<any>({});
+  const [issueByProjectData, setIssueByProjectData] = useState<any>({});
+  const [documentByProjectData, setDocumentByProjectData] = useState<any>({});
+  const [eventByProjectData, setEventByProjectData] = useState<any>({});
+  const [todayEvents, setTodayEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [projectStatusData, setProjectStatusData] = useState<any>({});
-  const [documentStats, setDocumentStats] = useState<any>({});
+  const [error, setError] = useState<string | null>(null);
+  
   const isDarkMode = useSelector((state: any) => state.ui.theme === 'dark' || (state.ui.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
-  const fetchStats = async () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Lấy danh sách dự án
-      const projectsRes = await axiosInstance.get('/projects?limit=1000');
-      const projects = projectsRes.data.projects || projectsRes.data;
-      const now = new Date();
-      let inProgress = 0, completed = 0, overdue = 0;
-      let statusCount: any = {};
-      projects.forEach((p: any) => {
-        statusCount[p.status] = (statusCount[p.status] || 0) + 1;
-        if (p.status === 'ACTIVE' || p.status === 'PLANNING' || p.status === 'ON_HOLD') inProgress++;
-        if (p.status === 'COMPLETED') completed++;
-        if ((p.status !== 'COMPLETED') && p.endDate && new Date(p.endDate) < now) overdue++;
+      const [
+        statsRes,
+        tasksByProjectRes,
+        issuesByProjectRes,
+        documentsByProjectRes,
+        todayEventsRes
+      ] = await Promise.all([
+        axiosInstance.get('/dashboard/stats'),
+        axiosInstance.get('/dashboard/tasks-by-project'),
+        axiosInstance.get('/dashboard/issues-by-project'),
+        axiosInstance.get('/dashboard/documents-by-project'),
+        axiosInstance.get('/dashboard/today-events')
+      ]);
+
+      setStats(statsRes.data.stats);
+      setRecentActivities(statsRes.data.recentActivities || []);
+
+      // Task by Project chart (Grouped Bar chart)
+      const taskData = tasksByProjectRes.data || [];
+      const taskLabels = taskData.map((d: TaskByProject) => d.projectName);
+      setTaskByProjectData({
+        labels: taskLabels,
+        datasets: [
+          {
+            label: 'Cao',
+            data: taskData.map((d: TaskByProject) => d.high),
+            backgroundColor: '#ff4d4f',
+            borderWidth: 1
+          },
+          {
+            label: 'Trung bình',
+            data: taskData.map((d: TaskByProject) => d.medium),
+            backgroundColor: '#faad14',
+            borderWidth: 1
+          },
+          {
+            label: 'Thấp',
+            data: taskData.map((d: TaskByProject) => d.low),
+            backgroundColor: '#1890ff',
+            borderWidth: 1
+          },
+          {
+            label: 'Không',
+            data: taskData.map((d: TaskByProject) => d.none),
+            backgroundColor: '#bfbfbf',
+            borderWidth: 1
+          }
+        ]
       });
-      setProjectStats({ total: projects.length, inProgress, completed, overdue });
-      setProjectStatusData({
-        labels: Object.keys(statusCount),
-        datasets: [{
-          label: 'Số lượng dự án',
-          data: Object.values(statusCount),
-          backgroundColor: ['#1890ff', '#faad14', '#52c41a', '#ff4d4f', '#722ed1', '#13c2c2'],
-        }]
+
+      // Issue by Project chart (Grouped Bar chart)
+      const issueData = issuesByProjectRes.data || [];
+      const issueLabels = issueData.map((d: IssueByProject) => d.projectName);
+      setIssueByProjectData({
+        labels: issueLabels,
+        datasets: [
+          {
+            label: 'Cao',
+            data: issueData.map((d: IssueByProject) => d.high),
+            backgroundColor: '#ff4d4f',
+            borderWidth: 1
+          },
+          {
+            label: 'Trung bình',
+            data: issueData.map((d: IssueByProject) => d.medium),
+            backgroundColor: '#faad14',
+            borderWidth: 1
+          },
+          {
+            label: 'Thấp',
+            data: issueData.map((d: IssueByProject) => d.low),
+            backgroundColor: '#1890ff',
+            borderWidth: 1
+          },
+          {
+            label: 'Không',
+            data: issueData.map((d: IssueByProject) => d.none),
+            backgroundColor: '#bfbfbf',
+            borderWidth: 1
+          }
+        ]
       });
-    } catch (e) {
-      setProjectStats({ total: 0, inProgress: 0, completed: 0, overdue: 0 });
-      setProjectStatusData({ labels: [], datasets: [] });
+
+      // Document by Project chart (Bar chart)
+      const documentData = documentsByProjectRes.data || [];
+      const documentLabels = documentData.map((d: DocumentByProject) => d.projectName);
+      setDocumentByProjectData({
+        labels: documentLabels,
+        datasets: [
+          {
+            label: 'Đã xuất bản',
+            data: documentData.map((d: DocumentByProject) => d.published),
+            backgroundColor: '#52c41a',
+            borderWidth: 1
+          },
+          {
+            label: 'Đã chia sẻ',
+            data: documentData.map((d: DocumentByProject) => d.shared),
+            backgroundColor: '#1890ff',
+            borderWidth: 1
+          },
+          {
+            label: 'Đang làm việc',
+            data: documentData.map((d: DocumentByProject) => d.wip),
+            backgroundColor: '#faad14',
+            borderWidth: 1
+          },
+          {
+            label: 'Đã lưu trữ',
+            data: documentData.map((d: DocumentByProject) => d.archived),
+            backgroundColor: '#8c8c8c',
+            borderWidth: 1
+          }
+        ]
+      });
+      setTodayEvents(todayEventsRes.data.events || []);
+
+    } catch (err: any) {
+      console.error('Dashboard data fetch error:', err);
+      setError('Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const fetchDocumentStats = async () => {
-    try {
-      const res = await axiosInstance.get('/documents');
-      const docs = Array.isArray(res.data) ? res.data : [];
-      let categoryCount: any = {};
-      docs.forEach((d: any) => {
-        categoryCount[d.category] = (categoryCount[d.category] || 0) + 1;
-      });
-      setDocumentStats({
-        labels: Object.keys(categoryCount),
-        datasets: [{
-          label: 'Tài liệu',
-          data: Object.values(categoryCount),
-          backgroundColor: ['#52c41a', '#faad14', '#1890ff', '#ff4d4f', '#722ed1', '#13c2c2'],
-        }]
-      });
-    } catch (e) {
-      setDocumentStats({ labels: [], datasets: [] });
-    }
-  };
-
-  const fetchActivities = async () => {
-    try {
-      const res = await axiosInstance.get('/activities?limit=10');
-      setActivities(res.data.logs || []);
-    } catch (e) {
-      console.error('Error fetching activities:', e);
-    }
-  };
-
-  useEffect(() => { 
-    fetchStats(); 
-    fetchDocumentStats();
-    fetchActivities();
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   useEffect(() => {
     const socket = io('http://localhost:3001');
     socket.on('activity:new', (activity: any) => {
-      setActivities(prev => [activity, ...prev.slice(0, 9)]);
+      setRecentActivities(prev => [activity, ...prev.slice(0, 9)]);
     });
     return () => { socket.disconnect(); };
   }, []);
@@ -106,74 +266,243 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getActivityText = (activity: any) => {
-    const actionMap: any = {
-      'upload': 'Upload',
-      'download': 'Downloaded',
-      'view': 'Viewed',
-      'comment': 'Commented on',
-      'create': 'Created',
-      'update': 'Updated',
-      'delete': 'Deleted'
-    };
-    return `${actionMap[activity.action] || activity.action} - ${activity.description}`;
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return '#52c41a';
+      case 'COMPLETED': return '#1890ff';
+      case 'ON_HOLD': return '#faad14';
+      case 'CANCELLED': return '#ff4d4f';
+      default: return '#8c8c8c';
+    }
   };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'CRITICAL': return '#ff4d4f';
+      case 'HIGH': return '#faad14';
+      case 'MEDIUM': return '#1890ff';
+      case 'LOW': return '#52c41a';
+      default: return '#8c8c8c';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16 }}>Đang tải dữ liệu dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={2} style={{ color: isDarkMode ? '#fff' : '#222', marginBottom: 24 }}>Tổng Quan Dự Án</Title>
+      <Title level={2} style={{ color: isDarkMode ? '#fff' : '#222', marginBottom: 24 }}>
+        <BarChartOutlined style={{ marginRight: 8 }} />
+        Dashboard Tổng Quan
+      </Title>
+
+      {error && (
+        <Alert
+          message="Lỗi"
+          description={error}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
+      {/* Statistics Cards */}
       <Row gutter={[24, 24]}>
-        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#223355' : '#f5faff' }}><Statistic title="Tổng Dự Án" value={projectStats.total} valueStyle={{ color: '#1890ff', fontWeight: 700 }} suffix={<ArrowUpOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#2d2d2d' : '#fffbe6' }}><Statistic title="Đang Tiến Hành" value={projectStats.inProgress} valueStyle={{ color: '#faad14', fontWeight: 700 }} suffix={<ClockCircleOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#1e3a2a' : '#f6ffed' }}><Statistic title="Hoàn Thành" value={projectStats.completed} valueStyle={{ color: '#52c41a', fontWeight: 700 }} suffix={<CheckCircleOutlined />} /></Card></Col>
-        <Col xs={24} sm={12} md={6}><Card style={{ background: isDarkMode ? '#3a2323' : '#fff1f0' }}><Statistic title="Trễ Hạn" value={projectStats.overdue} valueStyle={{ color: '#ff4d4f', fontWeight: 700 }} suffix={<CloseCircleOutlined />} /></Card></Col>
-      </Row>
-      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title={<span><ProjectOutlined /> Timeline Dự Án (Mini Gantt)</span>} bordered>
-            {/* Mini Gantt chart giả lập */}
-            <div style={{ marginBottom: 8 }}><b>Thiết Kế Nút Giao</b><div style={{ background: '#e6f7ff', borderRadius: 4, height: 8, width: '75%', margin: '4px 0' }} /></div>
-            <div style={{ marginBottom: 8 }}><b>Phân Tích Cầu Vượt</b><div style={{ background: '#fffbe6', borderRadius: 4, height: 8, width: '45%', margin: '4px 0' }} /></div>
-            <div style={{ marginBottom: 8 }}><b>Quy Hoạch Đô Thị</b><div style={{ background: '#fff1f0', borderRadius: 4, height: 8, width: '20%', margin: '4px 0' }} /></div>
+        <Col xs={24} sm={12} md={6}>
+          <Card style={{ background: isDarkMode ? '#223355' : '#f5faff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <ProjectOutlined style={{ fontSize: 32, color: '#1890ff' }} />
+              <Statistic 
+                title="Tổng Dự Án" 
+                value={stats.totalProjects} 
+                valueStyle={{ color: '#1890ff', fontWeight: 700 }} 
+              />
+            </div>
           </Card>
         </Col>
-        <Col xs={24} md={12}>
-          <Card title={<span><ProjectOutlined /> Heatmap Hoạt Động Dự Án</span>} bordered>
-            {/* Heatmap giả lập */}
-            <div style={{ display: 'flex', alignItems: 'center', height: 80 }}>
-              {[...Array(7)].map((_, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  {[...Array(5)].map((_, j) => (
-                    <div key={j} style={{ width: 16, height: 16, borderRadius: 4, margin: 2, background: `rgba(24, 144, 255, ${0.2 + 0.15 * j})` }} />
-                  ))}
-                  <div style={{ fontSize: 12, color: isDarkMode ? '#aaa' : '#888', marginTop: 2 }}>{['T2','T3','T4','T5','T6','T7','CN'][i]}</div>
-                </div>
-              ))}
-              <div style={{ marginLeft: 8, fontSize: 12, color: isDarkMode ? '#aaa' : '#888' }}>Nhiều</div>
+        <Col xs={24} sm={12} md={6}>
+          <Card style={{ background: isDarkMode ? '#2d2d2d' : '#fffbe6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <ClockCircleOutlined style={{ fontSize: 32, color: '#faad14' }} />
+              <Statistic 
+                title="Công Việc Đang Thực Hiện" 
+                value={stats.totalTasks} 
+                valueStyle={{ color: '#faad14', fontWeight: 700 }} 
+              />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card style={{ background: isDarkMode ? '#1e3a2a' : '#f6ffed' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <FileOutlined style={{ fontSize: 32, color: '#52c41a' }} />
+              <Statistic 
+                title="Tài Liệu" 
+                value={stats.totalDocuments} 
+                valueStyle={{ color: '#52c41a', fontWeight: 700 }} 
+              />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card style={{ background: isDarkMode ? '#3a2323' : '#fff1f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <ExclamationCircleOutlined style={{ fontSize: 32, color: '#ff4d4f' }} />
+              <Statistic 
+                title="Công Việc Trễ Hạn" 
+                value={stats.overdueTasks} 
+                valueStyle={{ color: '#ff4d4f', fontWeight: 700 }} 
+              />
             </div>
           </Card>
         </Col>
       </Row>
+
+      {/* Charts Row 1 - Tasks and Issues by Project */}
       <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title={<span><FileOutlined /> Phân Bổ Tài Liệu Theo Giai Đoạn CDE (ISO 19650)</span>} bordered>
-            {documentStats.labels && documentStats.labels.length > 0 ? (
-              <Pie data={documentStats} options={{ plugins: { legend: { position: 'bottom' } } }} height={220} />
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span><BarChartOutlined /> Nhiệm Vụ Theo Dự Án</span>} 
+            bordered
+          >
+            {taskByProjectData.labels && taskByProjectData.labels.length > 0 ? (
+              <Bar 
+                data={taskByProjectData} 
+                options={{ 
+                  plugins: { 
+                    legend: { position: 'top' },
+                    title: { display: false }
+                  },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: {
+                      stacked: false,
+                    },
+                    y: { 
+                      beginAtZero: true,
+                      stacked: false
+                    }
+                  }
+                }} 
+                height={300}
+              />
             ) : (
-              <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                Chưa có dữ liệu nhiệm vụ
+              </div>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span><ExclamationCircleOutlined /> Vấn Đề Theo Dự Án</span>} 
+            bordered
+          >
+            {issueByProjectData.labels && issueByProjectData.labels.length > 0 ? (
+              <Bar 
+                data={issueByProjectData} 
+                options={{ 
+                  plugins: { 
+                    legend: { position: 'top' },
+                    title: { display: false }
+                  },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: {
+                      stacked: false,
+                    },
+                    y: { 
+                      beginAtZero: true,
+                      stacked: false
+                    }
+                  }
+                }} 
+                height={300}
+              />
+            ) : (
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                Chưa có dữ liệu vấn đề
+              </div>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Charts Row 2 - Documents and Events by Project */}
+      <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span><FileOutlined /> Tài Liệu Theo Dự Án</span>} 
+            bordered
+          >
+            {documentByProjectData.labels && documentByProjectData.labels.length > 0 ? (
+              <Bar 
+                data={documentByProjectData} 
+                options={{ 
+                  plugins: { 
+                    legend: { position: 'top' },
+                    title: { display: false }
+                  },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: {
+                      stacked: true,
+                    },
+                    y: { 
+                      beginAtZero: true,
+                      stacked: true
+                    }
+                  }
+                }} 
+                height={300}
+              />
+            ) : (
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
                 Chưa có dữ liệu tài liệu
               </div>
             )}
           </Card>
         </Col>
-        <Col xs={24} md={12}>
-          <Card title={<span><CheckCircleOutlined /> Thống Kê Workflow Phê Duyệt</span>} bordered>
-            <Row gutter={16}>
-              <Col span={6}><Card style={{ background: isDarkMode ? '#2d2d2d' : '#fffbe6', textAlign: 'center' }}><div>Chờ duyệt</div><div style={{ fontSize: 24, color: '#faad14', fontWeight: 700 }}>12</div></Card></Col>
-              <Col span={6}><Card style={{ background: isDarkMode ? '#1e3a2a' : '#f6ffed', textAlign: 'center' }}><div>Đã duyệt</div><div style={{ fontSize: 24, color: '#52c41a', fontWeight: 700 }}>28</div></Card></Col>
-              <Col span={6}><Card style={{ background: isDarkMode ? '#3a2323' : '#fff1f0', textAlign: 'center' }}><div>Từ chối</div><div style={{ fontSize: 24, color: '#ff4d4f', fontWeight: 700 }}>3</div></Card></Col>
-              <Col span={6}><Card style={{ background: isDarkMode ? '#223355' : '#f0f5ff', textAlign: 'center' }}><div>Gửi lại</div><div style={{ fontSize: 24, color: '#1890ff', fontWeight: 700 }}>5</div></Card></Col>
-            </Row>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span><CalendarOutlined /> Sự Kiện Hôm Nay</span>} 
+            bordered
+          >
+            {todayEvents.length > 0 ? (
+              <List
+                dataSource={todayEvents}
+                renderItem={(event: any) => (
+                  <List.Item>
+                    <Card style={{ width: '100%' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600 }}>{event.title}</span>
+                        <span style={{ color: '#722ed1', fontWeight: 700 }}>
+                          {moment(event.startDate).format('HH:mm')} - {moment(event.endDate).format('HH:mm')}
+                        </span>
+                      </div>
+                      {event.description && (
+                        <div style={{ marginTop: 8, color: '#888' }}>{event.description}</div>
+                      )}
+                    </Card>
+                  </List.Item>
+                )}
+                locale={{ emptyText: 'Không có sự kiện nào hôm nay' }}
+              />
+            ) : (
+              <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                Không có sự kiện nào hôm nay
+              </div>
+            )}
           </Card>
         </Col>
       </Row>

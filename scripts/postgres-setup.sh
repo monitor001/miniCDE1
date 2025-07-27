@@ -1,38 +1,22 @@
 #!/bin/bash
+set -e
 
-echo "🐘 Setting up PostgreSQL for miniCDE..."
+# Create database if it doesn't exist
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+    
+    -- Create indexes for better performance
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+    CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+    
+    -- Grant permissions
+    GRANT ALL PRIVILEGES ON DATABASE minicde TO minicde_user;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO minicde_user;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO minicde_user;
+EOSQL
 
-# Check if Docker is running
-if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker first."
-    exit 1
-fi
-
-# Start PostgreSQL container
-echo "📦 Starting PostgreSQL container..."
-docker-compose up -d postgres
-
-# Wait for PostgreSQL to be ready
-echo "⏳ Waiting for PostgreSQL to be ready..."
-sleep 10
-
-# Install PostgreSQL dependencies
-echo "📦 Installing PostgreSQL dependencies..."
-cd backend
-npm install
-
-# Generate Prisma client
-echo "🔧 Generating Prisma client..."
-npx prisma generate
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-npx prisma migrate dev --name init_postgres
-
-# Seed database (optional)
-echo "🌱 Seeding database..."
-npm run db:seed
-
-echo "✅ PostgreSQL setup completed!"
-echo "📊 Database URL: postgresql://minicde_user:minicde_password@localhost:5432/minicde"
-echo "🔧 You can now run: npm run dev" 
+echo "PostgreSQL setup completed successfully!" 

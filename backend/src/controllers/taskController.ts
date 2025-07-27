@@ -360,13 +360,15 @@ export const createTask = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'create',
-      objectType: 'task',
-      objectId: task.id,
-      description: `Tạo công việc "${task.title}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'create',
+        objectType: 'task',
+        objectId: task.id,
+        description: `Tạo công việc "${task.title}"`
+      });
+    }
     
     res.status(201).json(task);
   } catch (error) {
@@ -686,13 +688,15 @@ export const addComment = async (req: Request, res: Response) => {
     });
     
     // Log activity
-    await logActivity({
-      userId: req.user?.id as string,
-      action: 'comment',
-      objectType: 'task',
-      objectId: id,
-      description: `Thêm bình luận cho công việc "${task.title}"`
-    });
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'comment',
+        objectType: 'task',
+        objectId: id,
+        description: `Thêm bình luận cho công việc "${task.title}"`
+      });
+    }
     
     res.status(201).json(comment);
   } catch (error) {

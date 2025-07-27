@@ -9,7 +9,6 @@ import {
   MenuUnfoldOutlined,
   DashboardOutlined,
   ProjectOutlined,
-  FileOutlined,
   TeamOutlined,
   SettingOutlined,
   UserOutlined,
@@ -20,12 +19,14 @@ import {
   CheckSquareOutlined,
   ExclamationCircleOutlined,
   CalendarOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  CommentOutlined
 } from '@ant-design/icons';
 
 import { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
 import { toggleSidebar, setLanguage, setTheme } from '../store/slices/uiSlice';
+import io from 'socket.io-client';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -49,6 +50,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
   const [notificationsVisible, setNotificationsVisible] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   
+  const socket = io(process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:3001', {
+    transports: ['websocket']
+  });
+
   // Get current path for menu selection
   const currentPath = location.pathname.split('/')[1] || 'dashboard';
   
@@ -85,31 +90,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
   
   // Fetch notifications
   useEffect(() => {
-    // Mock notifications
-    setNotifications([
-      {
-        id: 1,
-        title: 'New document uploaded',
-        message: 'John Doe uploaded a new document',
-        time: '10 minutes ago',
-        read: false
-      },
-      {
-        id: 2,
-        title: 'Task assigned',
-        message: 'You have been assigned a new task',
-        time: '1 hour ago',
-        read: false
-      },
-      {
-        id: 3,
-        title: 'Project update',
-        message: 'Project status has been updated',
-        time: '2 hours ago',
-        read: true
-      }
-    ]);
+    // Lắng nghe realtime activity log
+    socket.on('activity:new', (activity: any) => {
+      setNotifications(prev => [
+        {
+          id: activity.id,
+          title: `${activity.user?.name || activity.user?.email || 'Người dùng'} vừa ${activity.action}`,
+          message: activity.description || '',
+          time: new Date(activity.createdAt).toLocaleString(),
+          read: false
+        },
+        ...prev
+      ]);
+    });
+    return () => {
+      socket.off('activity:new');
+    };
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      socket.emit('join-user', user.id);
+    }
+  }, [user?.id]);
   
   // Menu items
   const menuItems = [
@@ -132,17 +135,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
       onClick: () => navigate('/tasks')
     },
     {
-      key: 'documents',
-      icon: <FileOutlined />,
-      label: t('navigation.documents'),
-      onClick: () => navigate('/documents')
-    },
-    {
       key: 'issues',
       icon: <ExclamationCircleOutlined />,
       label: 'Vấn đề',
       onClick: () => navigate('/issues'),
       description: 'Quản lý vấn đề, yêu cầu thông tin và theo dõi giải quyết'
+    },
+    {
+      key: 'documents-iso',
+      icon: <FileTextOutlined />,
+      label: 'Tài liệu ISO 19650',
+      onClick: () => navigate('/documents-iso'),
+      description: 'Quản lý tài liệu theo chuẩn ISO 19650'
     },
     {
       key: 'calendar',
@@ -152,12 +156,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
       description: 'Quản lý lịch họp, deadline, milestone và các sự kiện dự án'
     },
     {
+      key: 'notes',
+      icon: <CommentOutlined />,
+      label: 'Ghi chú',
+      onClick: () => navigate('/notes')
+    },
+    // Ẩn menu Báo cáo nếu không phải ADMIN
+    ...(user?.role === 'ADMIN' ? [{
       key: 'reports',
       icon: <FileTextOutlined />,
       label: 'Báo cáo',
       onClick: () => navigate('/reports'),
       description: 'Quản lý báo cáo và theo dõi hoạt động hệ thống'
-    },
+    }] : []),
     // Chỉ hiển thị menu Users cho ADMIN
     ...(user?.role === 'ADMIN' ? [{
       key: 'users',
@@ -260,7 +271,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
           left: 0,
           top: 0,
           bottom: 0,
-          zIndex: 1000
+          zIndex: 1000,
+          background: isDarkMode ? '#001529' : '#ffffff',
+          boxShadow: isDarkMode ? '2px 0 8px rgba(0,0,0,0.3)' : '2px 0 8px rgba(0,0,0,0.1)',
+          borderRight: isDarkMode ? '1px solid #303030' : '1px solid #f0f0f0'
         }}
         theme={isDarkMode ? 'dark' : 'light'}
       >
@@ -270,18 +284,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
           alignItems: 'center', 
           justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
           padding: sidebarCollapsed ? 0 : '0 16px',
-          color: token.colorPrimary,
-          fontSize: 18,
-          fontWeight: 'bold'
+          color: isDarkMode ? '#ffffff' : '#1890ff',
+          fontSize: 20,
+          fontWeight: 'bold',
+          background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(24,144,255,0.05)',
+          borderBottom: isDarkMode ? '1px solid #303030' : '1px solid #f0f0f0'
         }}>
-          {!sidebarCollapsed && 'CDE BIM'}
-          {sidebarCollapsed && 'CDE'}
+          {!sidebarCollapsed && 'Hoàng Long'}
+          {sidebarCollapsed && 'HL'}
         </div>
         <Menu
           theme={isDarkMode ? 'dark' : 'light'}
           mode="inline"
           defaultSelectedKeys={[currentPath]}
           items={menuItems}
+          style={{
+            background: 'transparent',
+            border: 'none'
+          }}
         />
       </Sider>
       
@@ -291,13 +311,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, setIsDarkMode }) =>
         onClose={() => setMobileDrawerVisible(false)}
         open={mobileDrawerVisible}
         bodyStyle={{ padding: 0 }}
-        title="CDE BIM"
+        title="Hoàng Long"
       >
         <Menu
           theme={isDarkMode ? 'dark' : 'light'}
           mode="inline"
           defaultSelectedKeys={[currentPath]}
           items={menuItems}
+          style={{
+            background: isDarkMode ? '#001529' : '#ffffff',
+            border: 'none'
+          }}
         />
       </Drawer>
       

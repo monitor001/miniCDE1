@@ -14,8 +14,9 @@ import AuthLayout from './layouts/AuthLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Project from './pages/Project';
+import ProjectsNew from './pages/ProjectsNew';
 import ProjectDetail from './pages/ProjectDetail';
-import Documents from './pages/Documents';
+import DocumentsISO from './pages/DocumentsISO';
 import DocumentDetail from './pages/DocumentDetail';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
@@ -25,7 +26,10 @@ import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import Issues from './pages/Issues';
 import CalendarPage from './pages/CalendarPage';
+
 import Reports from './pages/Reports';
+import IssueDetail from './pages/IssueDetail';
+import Notes from './pages/Notes';
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -153,10 +157,10 @@ const App: React.FC = () => {
                 <Route element={<MainLayout setIsDarkMode={setIsDarkMode} isDarkMode={isDarkMode} />}>
                   <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
                   
-                  <Route path="/projects" element={<PrivateRoute><Project /></PrivateRoute>} />
+                  <Route path="/projects" element={<PrivateRoute><ProjectsNew /></PrivateRoute>} />
                   <Route path="/projects/:id" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
                   
-                  <Route path="/documents" element={<PrivateRoute><Documents /></PrivateRoute>} />
+                  <Route path="/documents-iso" element={<PrivateRoute><DocumentsISO /></PrivateRoute>} />
                   <Route path="/documents/:id" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
                   
                   <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
@@ -167,8 +171,10 @@ const App: React.FC = () => {
                   
                   <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
                   <Route path="/issues" element={<PrivateRoute><Issues /></PrivateRoute>} />
+                  <Route path="/issues/:id" element={<PrivateRoute><IssueDetail /></PrivateRoute>} />
                   <Route path="/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
-                  <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+                  <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+                  <Route path="/notes" element={<Notes />} />
                 </Route>
 
                 {/* Not found */}

@@ -1,821 +1,500 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState, useEffect } from 'react';
 import { 
-  Typography, Card, Tabs, Button, Space, Tag, Descriptions, 
-  Table, Modal, Form, Input, Select, Spin, Popconfirm, message, 
-  DatePicker, List, Avatar, Upload
+  Card,
+  Row,
+  Col,
+  Typography,
+  Tag,
+  Progress,
+  Avatar,
+  Space,
+  Button,
+  Divider,
+  Statistic,
+  List,
+  Tooltip,
+  Badge,
+  Timeline,
+  Descriptions,
+  Tabs,
+  Table,
+  message
 } from 'antd';
 import { 
-  EditOutlined, DeleteOutlined, PlusOutlined, 
-  UserAddOutlined, TeamOutlined, FileOutlined, 
-  CommentOutlined, UploadOutlined
+  FolderOutlined,
+  UserOutlined,
+  TeamOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  MessageOutlined,
+  SettingOutlined,
+  ArrowLeftOutlined
 } from '@ant-design/icons';
-import { fetchProjectById, updateProject, deleteProject } from '../store/slices/projectSlice';
-import { RootState } from '../store';
-import type { TabsProps } from 'antd';
 import moment from 'moment';
+import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../axiosConfig';
-import type { UploadProps } from 'antd';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
-const { Option } = Select;
-const { TextArea } = Input;
+
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  priority: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  manager: string;
+  managerId?: string;
+  teamSize: number;
+  documents: number;
+  tasks: number;
+  issues: number;
+  members: ProjectMember[];
+  permissions: ProjectPermission[];
+  comments?: ProjectComment[];
+}
+
+interface ProjectMember {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: 'OWNER' | 'MANAGER' | 'MEMBER' | 'VIEWER';
+  joinedAt: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+interface ProjectPermission {
+  id: string;
+  userId: string;
+  permission: 'READ' | 'WRITE' | 'DELETE' | 'ADMIN';
+  resource: 'PROJECT' | 'DOCUMENTS' | 'TASKS' | 'ISSUES' | 'CALENDAR';
+  grantedAt: string;
+}
+
+interface ProjectComment {
+  id: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt?: string;
+}
 
 const ProjectDetail: React.FC = () => {
-  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  
-  const { currentProject, isLoading, error } = useSelector((state: RootState) => state.projects);
-  const { user } = useSelector((state: RootState) => state.auth);
-  
-  const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
-  const [isAddMemberModalVisible, setIsAddMemberModalVisible] = useState<boolean>(false);
-  const [isAddNoteModalVisible, setIsAddNoteModalVisible] = useState<boolean>(false);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [form] = Form.useForm();
-  const [memberForm] = Form.useForm();
-  const [noteForm] = Form.useForm();
-  
-  // Add these state variables and functions
-  const [isUploadModalVisible, setIsUploadModalVisible] = useState<boolean>(false);
-  const [uploading, setUploading] = useState<boolean>(false);
-  const [fileList, setFileList] = useState<any[]>([]);
-  const [projectImages, setProjectImages] = useState<any[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [comments, setComments] = useState<ProjectComment[]>([]);
 
-  // Fetch project data
   useEffect(() => {
     if (id) {
-      dispatch(fetchProjectById(id) as any);
+      fetchProjectDetails();
+      fetchComments();
     }
-  }, [dispatch, id]);
-  
-  // Fetch project images
-  useEffect(() => {
-    const fetchImages = async () => {
-      if (id) {
-        try {
-          const response = await axiosInstance.get(`/projects/${id}/images`);
-          if (Array.isArray(response.data)) {
-            setProjectImages(response.data);
-          } else {
-            console.warn('Unexpected images data format:', response.data);
-            setProjectImages([]);
-          }
-        } catch (error) {
-          console.error('Error fetching images:', error);
-          setProjectImages([]);
-        }
-      }
-    };
-    
-    fetchImages();
   }, [id]);
   
-  // Fetch project notes
-  useEffect(() => {
-    const fetchNotes = async () => {
-      if (id) {
-        try {
-          console.log('Fetching notes for project:', id);
-          const response = await axiosInstance.get(`/projects/${id}/notes`);
-          console.log('Notes fetch response:', response.data);
-          
-          if (Array.isArray(response.data)) {
-            setNotes(response.data);
-          } else {
-            console.warn('Unexpected notes data format:', response.data);
-            setNotes([]);
-          }
+  const fetchProjectDetails = async () => {
+    try {
+      const response = await axiosInstance.get(`/projects/${id}`);
+      setProject(response.data);
         } catch (error) {
-          console.error('Error fetching notes:', error);
-          // Mặc định nếu API gặp lỗi thì dùng dữ liệu mẫu
-          setNotes([
-            {
-              id: '1',
-              content: 'Ghi chú mẫu 1',
-              createdAt: new Date().toISOString(),
-              user: { name: 'Admin', id: '1' }
-            },
-            {
-              id: '2',
-              content: 'Ghi chú mẫu 2',
-              createdAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-              user: { name: 'Admin', id: '1' }
-            }
-          ]);
-        }
-      }
-    };
-    
-    fetchNotes();
-  }, [id]);
-  
-  // Set form values when project data is loaded
-  useEffect(() => {
-    if (currentProject) {
-      form.setFieldsValue({
-        name: currentProject.name,
-        description: currentProject.description,
-        status: currentProject.status,
-        priority: currentProject.priority,
-        startDate: currentProject.startDate ? moment(currentProject.startDate) : null,
-        endDate: currentProject.endDate ? moment(currentProject.endDate) : null
-      });
-    }
-  }, [currentProject, form]);
-  
-  if (isLoading) {
-    return <Spin size="large" />;
-  }
-  
-  if (error) {
-    return <div>{error}</div>;
-  }
-  
-  if (!currentProject) {
-    return <div>{t('projects.notFound')}</div>;
-  }
-  
-  // Handle project update
-  const handleUpdateProject = async (values: any) => {
-    if (id) {
-      // Đảm bảo các giá trị mặc định
-      const formattedValues = {
-        ...values,
-        name: values.name?.trim() || '',
-        description: values.description?.trim() || '',
-        status: values.status || 'ACTIVE',
-        priority: values.priority || 'MEDIUM',
-        startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : null,
-        endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : null
-      };
-      
-      console.log('Sending project update data:', formattedValues);
-      await dispatch(updateProject({ id, data: formattedValues }) as any);
-      setIsEditModalVisible(false);
-      message.success(t('projects.updateSuccess'));
+      console.error('Error fetching project details:', error);
+      message.error('Không thể tải thông tin dự án!');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Helper function để hiển thị dữ liệu an toàn
-  const safeRender = (value: any, defaultValue: string = t('common.notSet')): string => {
-    if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) {
-      return defaultValue;
-    }
-    return value;
-  };
-
-  // Helper function để hiển thị ngày tháng
-  const renderDate = (date: any): string => {
-    if (!date) return t('common.notSet');
+  const fetchComments = async () => {
     try {
-      return new Date(date).toLocaleDateString();
-    } catch (e) {
-      console.error('Error rendering date:', e);
-      return t('common.notSet');
-    }
-  };
-  
-  // Handle project delete
-  const handleDeleteProject = async () => {
-    if (id) {
-      await dispatch(deleteProject(id) as any);
-      navigate('/projects');
-      message.success(t('projects.deleteSuccess'));
-    }
-  };
-  
-  // Handle add note
-  const handleAddNote = async () => {
-    try {
-      const values = await noteForm.validateFields();
-      
-      console.log('Adding note with data:', values);
-      
-      try {
-        // Call the proper API endpoint
-        const response = await axiosInstance.post(`/projects/${id}/notes`, {
-          content: values.content
-        });
-        
-        console.log('Note creation response:', response.data);
-        
-        // Update the notes list with the new note from the API response
-        if (response.data) {
-          setNotes([response.data, ...notes]);
-        } else {
-          // Fallback if API doesn't return the created note
-          const newNote = {
-            id: Date.now().toString(),
-            content: values.content,
-            createdAt: new Date().toISOString(),
-            user: { name: user?.name || 'Unknown', id: user?.id || '0' }
-          };
-          setNotes([newNote, ...notes]);
-        }
-        
-        noteForm.resetFields();
-        setIsAddNoteModalVisible(false);
-        message.success(t('notes.addSuccess'));
-      } catch (error: any) {
-        console.error('Error adding note:', error);
-        console.error('Response data:', error.response?.data);
-        message.error(error.response?.data?.error || t('notes.addError'));
+      const response = await axiosInstance.get(`/projects/${id}/comments`);
+      let commentsData = [];
+      if (response.data && Array.isArray(response.data)) {
+        commentsData = response.data;
+      } else if (response.data && response.data.comments && Array.isArray(response.data.comments)) {
+        commentsData = response.data.comments;
       }
+      setComments(commentsData);
     } catch (error) {
-      console.error('Form validation error:', error);
-    }
-  };
-  
-  // Project status tag color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'green';
-      case 'COMPLETED':
-        return 'blue';
-      case 'ON_HOLD':
-        return 'orange';
-      case 'CANCELLED':
-        return 'red';
-      default:
-        return 'default';
-    }
-  };
-  
-  // Member role tag color
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'OWNER':
-        return 'gold';
-      case 'ADMIN':
-        return 'red';
-      case 'EDITOR':
-        return 'green';
-      case 'VIEWER':
-        return 'blue';
-      default:
-        return 'default';
+      console.error('Error fetching comments:', error);
+      setComments([]);
     }
   };
 
-  // Project priority tag color
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'HIGH':
-        return 'red';
-      case 'MEDIUM':
-        return 'orange';
-      case 'LOW':
-        return 'blue';
-      default:
-        return 'default';
+  const getStatusDisplay = (status: string) => {
+    const statusMap: { [key: string]: { label: string; color: string; icon: React.ReactNode } } = {
+      'ACTIVE': { label: 'Đang thực hiện', color: 'green', icon: <CheckCircleOutlined /> },
+      'PLANNING': { label: 'Lập kế hoạch', color: 'blue', icon: <ClockCircleOutlined /> },
+      'ON_HOLD': { label: 'Tạm dừng', color: 'orange', icon: <ExclamationCircleOutlined /> },
+      'COMPLETED': { label: 'Hoàn thành', color: 'purple', icon: <CheckCircleOutlined /> },
+      'ARCHIVED': { label: 'Lưu trữ', color: 'grey', icon: <ExclamationCircleOutlined /> }
+    };
+    return statusMap[status] || { label: status, color: 'default', icon: null };
+  };
+
+  const getPriorityDisplay = (priority: string) => {
+    const priorityMap: { [key: string]: { label: string; color: string } } = {
+      'HIGH': { label: 'Cao', color: 'red' },
+      'MEDIUM': { label: 'Trung bình', color: 'orange' },
+      'LOW': { label: 'Thấp', color: 'green' },
+      'NONE': { label: 'Không', color: 'default' }
+    };
+    return priorityMap[priority] || { label: priority, color: 'default' };
+  };
+
+  const handleEdit = () => {
+    navigate(`/projects/edit/${id}`);
+  };
+
+  const handleDelete = async () => {
+    try {
+      await axiosInstance.delete(`/projects/${id}`);
+      message.success('Đã xóa dự án!');
+      navigate('/projects');
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      message.error('Lỗi khi xóa dự án!');
     }
   };
-  
-  // Define filesTab before using it
-  const filesTab = {
-    key: 'files',
-    label: t('projects.tabs.files'),
-    children: (
-      <>
-        <div style={{ marginBottom: 16 }}>
+
+  if (loading) {
+    return <div>Đang tải...</div>;
+  }
+
+  if (!project) {
+    return <div>Không tìm thấy dự án</div>;
+  }
+
+  const statusInfo = getStatusDisplay(project.status);
+  const priorityInfo = getPriorityDisplay(project.priority);
+
+  return (
+    <div style={{ padding: 24 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <Button 
-            type="primary" 
-            icon={<UploadOutlined />} 
-            onClick={() => setIsUploadModalVisible(true)}
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/projects')}
           >
-            {t('uploads.uploadFiles')}
+            Quay lại
           </Button>
-        </div>
-        
-        {projectImages && projectImages.length > 0 ? (
-          <List
-            grid={{ gutter: 16, column: 4 }}
-            dataSource={projectImages}
-            renderItem={(file: any) => (
-              <List.Item key={file.id}>
-                <Card
-                  hoverable
-                  cover={
-                    <img 
-                      alt={file.name || 'Project image'} 
-                      src={file.url} 
-                      style={{ height: 200, objectFit: 'cover' }}
-                    />
-                  }
-                  actions={[
-                    <a 
-                      key="download" 
-                      href={file.url} 
-                      download 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                    >
-                      {t('common.download')}
-                    </a>
-                  ]}
-                >
-                  <Card.Meta
-                    title={file.name || 'Image'}
-                    description={
-                      <>
-                        <div>{moment(file.createdAt).format('DD/MM/YYYY')}</div>
-                        <div>{file.user?.name || 'Unknown user'}</div>
-                      </>
-                    }
-                  />
-                </Card>
-              </List.Item>
-            )}
-          />
-        ) : (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <p>{t('uploads.noFiles')}</p>
+          <div>
+            <Title level={2} style={{ margin: 0 }}>{project.name}</Title>
+            <Text type="secondary">{project.description}</Text>
           </div>
-        )}
-      </>
-    ),
-  };
-  
-  // Tab items
-  const items: TabsProps['items'] = [
-    {
-      key: 'overview',
-      label: t('projects.tabs.overview'),
-      children: (
-        <Descriptions bordered column={{ xxl: 4, xl: 3, lg: 3, md: 3, sm: 2, xs: 1 }}>
-          <Descriptions.Item label={t('projects.name')}>{safeRender(currentProject.name)}</Descriptions.Item>
-          <Descriptions.Item label={t('projects.status')}>
-            <Tag color={getStatusColor(currentProject.status)}>{currentProject.status}</Tag>
+        </div>
+        <Space>
+          <Button icon={<DownloadOutlined />}>
+            Xuất Báo Cáo
+          </Button>
+          <Button icon={<EditOutlined />} onClick={handleEdit}>
+            Chỉnh sửa
+          </Button>
+          <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
+            Xóa
+          </Button>
+        </Space>
+          </div>
+
+      {/* Project Overview */}
+      <Row gutter={24} style={{ marginBottom: 24 }}>
+        <Col span={16}>
+          <Card title="Thông tin dự án">
+            <Descriptions column={2}>
+              <Descriptions.Item label="Trạng thái">
+                <Tag color={statusInfo.color} icon={statusInfo.icon}>
+                  {statusInfo.label}
+                </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label={t('projects.startDate')}>
-            {renderDate(currentProject.startDate)}
+              <Descriptions.Item label="Mức độ ưu tiên">
+                <Tag color={priorityInfo.color}>
+                  {priorityInfo.label}
+                </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label={t('projects.endDate')}>
-            {renderDate(currentProject.endDate)}
+              <Descriptions.Item label="Ngày bắt đầu">
+                {moment(project.startDate).format('DD/MM/YYYY')}
           </Descriptions.Item>
-          <Descriptions.Item label={t('projects.priority')}>
-            {currentProject.priority ? 
-              <Tag color={getPriorityColor(currentProject.priority)}>{currentProject.priority}</Tag> 
-              : t('common.notSet')}
+              <Descriptions.Item label="Ngày kết thúc">
+                {moment(project.endDate).format('DD/MM/YYYY')}
           </Descriptions.Item>
-          <Descriptions.Item label={t('common.createdAt')}>
-            {renderDate(currentProject.createdAt)}
+              <Descriptions.Item label="Quản lý dự án">
+                {project.manager}
           </Descriptions.Item>
-          <Descriptions.Item label={t('common.updatedAt')}>
-            {renderDate(currentProject.updatedAt)}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('projects.description')} span={4}>
-            {safeRender(currentProject.description, t('common.noDescription'))}
+              <Descriptions.Item label="Số thành viên">
+                {project.teamSize}
           </Descriptions.Item>
         </Descriptions>
-      ),
-    },
-    {
-      key: 'members',
-      label: t('projects.tabs.members'),
-      children: (
-        <>
-          <div style={{ marginBottom: 16 }}>
-            <Button 
-              type="primary" 
-              icon={<UserAddOutlined />} 
-              onClick={() => setIsAddMemberModalVisible(true)}
-            >
-              {t('projects.addMember')}
-            </Button>
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card title="Tiến độ dự án">
+            <div style={{ textAlign: 'center' }}>
+              <Progress 
+                type="circle" 
+                percent={project.progress} 
+                size={120}
+                strokeColor={{
+                  '0%': '#108ee9',
+                  '100%': '#87d068',
+                }}
+              />
+              <div style={{ marginTop: 16 }}>
+                <Text strong>{project.progress}% hoàn thành</Text>
+              </div>
           </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Statistics */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="Tài liệu"
+              value={project.documents}
+              prefix={<FileTextOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="Nhiệm vụ"
+              value={project.tasks}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="Vấn đề"
+              value={project.issues}
+              prefix={<ExclamationCircleOutlined />}
+              valueStyle={{ color: '#faad14' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="Thành viên"
+              value={project.members?.length || 0}
+              prefix={<TeamOutlined />}
+              valueStyle={{ color: '#722ed1' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Detailed Information */}
+      <Tabs defaultActiveKey="members">
+        <TabPane tab="Thành viên" key="members">
+          <Card>
           <Table 
-            dataSource={currentProject.members} 
-            rowKey="id"
+              dataSource={project.members || []}
             columns={[
               {
-                title: t('users.name'),
-                dataIndex: ['user', 'name'],
-                key: 'name',
-              },
-              {
-                title: t('users.email'),
-                dataIndex: ['user', 'email'],
-                key: 'email',
-              },
-              {
-                title: t('projects.role'),
+                  title: 'Thành viên',
+                  key: 'user',
+                  render: (record: ProjectMember) => (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Avatar size={32}>
+                        {(record.userName || 'U').charAt(0)}
+                      </Avatar>
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{record.userName || 'Unknown'}</div>
+                        <div style={{ fontSize: 12, color: '#666' }}>{record.userEmail || 'No email'}</div>
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  title: 'Vai trò',
                 dataIndex: 'role',
                 key: 'role',
-                render: (role) => <Tag color={getRoleColor(role)}>{role}</Tag>,
-              },
-              {
-                title: t('common.actions'),
-                key: 'actions',
-                render: (_, record) => (
-                  <Space>
-                    <Button size="small" icon={<EditOutlined />} />
-                    <Popconfirm
-                      title={t('projects.confirmRemoveMember')}
-                      onConfirm={() => {}}
-                      okText={t('common.yes')}
-                      cancelText={t('common.no')}
-                    >
-                      <Button size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </>
-      ),
-    },
-    {
-      key: 'containers',
-      label: t('projects.tabs.containers'),
-      children: (
-        <>
-          <div style={{ marginBottom: 16 }}>
-            <Button type="primary" icon={<PlusOutlined />}>
-              {t('containers.create')}
-            </Button>
-          </div>
-          <Table 
-            dataSource={currentProject.containers} 
-            rowKey="id"
-            columns={[
-              {
-                title: t('containers.name'),
-                dataIndex: 'name',
-                key: 'name',
-              },
-              {
-                title: t('containers.status'),
+                  render: (role: string) => {
+                    const roleColors = {
+                      'OWNER': 'red',
+                      'MANAGER': 'orange',
+                      'MEMBER': 'blue',
+                      'VIEWER': 'green'
+                    };
+                    return <Tag color={roleColors[role as keyof typeof roleColors]}>{role}</Tag>;
+                  }
+                },
+                {
+                  title: 'Ngày tham gia',
+                  dataIndex: 'joinedAt',
+                  key: 'joinedAt',
+                  render: (date: string) => moment(date).format('DD/MM/YYYY')
+                },
+                {
+                  title: 'Trạng thái',
                 dataIndex: 'status',
                 key: 'status',
-                render: (status) => {
-                  let color = 'default';
-                  if (status === 'WIP') color = 'processing';
-                  if (status === 'SHARED') color = 'warning';
-                  if (status === 'PUBLISHED') color = 'success';
-                  if (status === 'ARCHIVED') color = 'default';
-                  
-                  return <Tag color={color}>{status}</Tag>;
-                },
-              },
-              {
-                title: t('documents.count'),
-                dataIndex: 'documentCount',
-                key: 'documentCount',
-                render: (count) => count || 0,
-              },
-              {
-                title: t('common.createdAt'),
-                dataIndex: 'createdAt',
-                key: 'createdAt',
-                render: (date) => new Date(date).toLocaleDateString(),
-              },
-              {
-                title: t('common.actions'),
-                key: 'actions',
-                render: (_, record) => (
-                  <Space>
-                    <Button 
-                      size="small" 
-                      icon={<FileOutlined />}
-                      onClick={() => navigate(`/documents?containerId=${record.id}`)}
-                    />
-                    <Button size="small" icon={<EditOutlined />} />
-                    <Popconfirm
-                      title={t('containers.confirmDelete')}
-                      onConfirm={() => {}}
-                      okText={t('common.yes')}
-                      cancelText={t('common.no')}
-                    >
-                      <Button size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </>
-      ),
-    },
-    {
-      key: 'notes',
-      label: t('projects.tabs.notes'),
-      children: (
-        <>
-          <div style={{ marginBottom: 16 }}>
-            <Button 
-              type="primary" 
-              icon={<CommentOutlined />} 
-              onClick={() => setIsAddNoteModalVisible(true)}
-            >
-              {t('notes.addNote')}
-            </Button>
+                  render: (status: string) => (
+                    <Tag color={status === 'ACTIVE' ? 'green' : 'red'}>
+                      {status === 'ACTIVE' ? 'Hoạt động' : 'Không hoạt động'}
+                    </Tag>
+                  )
+                }
+              ]}
+              pagination={false}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab="Bình luận" key="comments">
+          <Card
+            style={{
+              background:
+                project?.priority === 'HIGH' ? 'linear-gradient(135deg, #ffeaea 0%, #ffd6d6 100%)'
+                : project?.priority === 'MEDIUM' ? 'linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%)'
+                : project?.priority === 'LOW' ? 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)'
+                : 'linear-gradient(135deg, #f5f5f5 0%, #e6e6e6 100%)',
+              border: project?.priority === 'HIGH' ? '1.5px solid #ff7875'
+                : project?.priority === 'MEDIUM' ? '1.5px solid #faad14'
+                : project?.priority === 'LOW' ? '1.5px solid #1890ff'
+                : '1.5px solid #d9d9d9',
+              borderRadius: 12,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+            }}
+          >
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {comments.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>
+                  Chưa có bình luận nào
           </div>
+              ) : (
           <List
-            dataSource={notes}
-            renderItem={(note: any) => (
-              <List.Item
-                key={note.id}
-                actions={[
-                  <span key="date">
-                    {note.createdAt ? moment(note.createdAt).fromNow() : '-'}
-                  </span>,
-                  <span key="user">
-                    {note.user?.name || 'Unknown'}
-                  </span>,
-                ]}
-              >
+                  dataSource={comments}
+                  renderItem={(comment) => (
+                    <List.Item>
                 <List.Item.Meta
                   avatar={
-                    <Avatar>
-                      {note.user?.name ? note.user.name.charAt(0) : '?'}
+                          <Avatar
+                            style={{
+                              background:
+                                project?.priority === 'HIGH' ? 'linear-gradient(135deg, #ff7875 0%, #ffa39e 100%)'
+                                : project?.priority === 'MEDIUM' ? 'linear-gradient(135deg, #faad14 0%, #ffe58f 100%)'
+                                : project?.priority === 'LOW' ? 'linear-gradient(135deg, #1890ff 0%, #91d5ff 100%)'
+                                : 'linear-gradient(135deg, #bfbfbf 0%, #e6e6e6 100%)',
+                              color: '#fff', fontWeight: 700
+                            }}
+                          >
+                            {(comment.authorName || 'U').charAt(0)}
                     </Avatar>
                   }
-                  title={note.user?.name || 'Unknown'}
-                  description={note.content || ''}
+                        title={
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{comment.authorName || 'Unknown'}</span>
+                            <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                              {moment(comment.createdAt).format('DD/MM/YYYY HH:mm')}
+                            </span>
+                          </div>
+                        }
+                        description={
+                          <div style={{
+                            background: 'rgba(255,255,255,0.7)',
+                            borderRadius: 8,
+                            padding: 12,
+                            border:
+                              project?.priority === 'HIGH' ? '1px solid #ff7875'
+                              : project?.priority === 'MEDIUM' ? '1px solid #faad14'
+                              : project?.priority === 'LOW' ? '1px solid #1890ff'
+                              : '1px solid #d9d9d9',
+                            color: '#333',
+                            fontSize: 14
+                          }}>{comment.content}</div>
+                        }
                 />
               </List.Item>
             )}
-            locale={{ emptyText: t('notes.noNotes') }}
-          />
-        </>
-      ),
-    },
-    filesTab, // Add the new files tab
-  ];
-  
-  // Handle file upload
-  const handleUpload = async () => {
-    if (fileList.length === 0) {
-      message.error(t('common.noFileSelected'));
-      return;
-    }
-    
-    const formData = new FormData();
-    fileList.forEach((file) => {
-      formData.append('files', file);
-    });
-    formData.append('projectId', id as string);
-    
-    setUploading(true);
-    
-    try {
-      console.log('Uploading files:', fileList);
-      const response = await axiosInstance.post(`/projects/${id}/images`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      console.log('Upload response:', response.data);
-      
-      // Refresh the image list by fetching the latest images
-      try {
-        const imagesResponse = await axiosInstance.get(`/projects/${id}/images`);
-        if (Array.isArray(imagesResponse.data)) {
-          setProjectImages(imagesResponse.data);
-        }
-      } catch (imgError) {
-        console.error('Error refreshing images:', imgError);
-      }
-      
-      message.success(t('uploads.success'));
-      setFileList([]);
-      setIsUploadModalVisible(false);
-    } catch (error: any) {
-      console.error('Upload error:', error);
-      message.error(error.response?.data?.error || t('uploads.error'));
-    } finally {
-      setUploading(false);
-    }
-  };
+                />
+              )}
+            </div>
+          </Card>
+        </TabPane>
 
-  const uploadProps: UploadProps = {
-    onRemove: (file) => {
-      const index = fileList.indexOf(file);
-      const newFileList = fileList.slice();
-      newFileList.splice(index, 1);
-      setFileList(newFileList);
-    },
-    beforeUpload: (file) => {
-      setFileList([...fileList, file]);
-      return false;
-    },
-    fileList,
-  };
-  
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={2}>{currentProject.name}</Title>
-        <Space>
-          <Tag color={getPriorityColor(currentProject.priority || 'MEDIUM')}>
-            {currentProject.priority || t('common.notSet')}
-          </Tag>
-          <Tag color={getStatusColor(currentProject.status)}>
-            {currentProject.status}
-          </Tag>
-          <Button 
-            type="primary" 
-            icon={<EditOutlined />} 
-            onClick={() => setIsEditModalVisible(true)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm
-            title={t('projects.confirmDelete')}
-            onConfirm={handleDeleteProject}
-            okText={t('common.yes')}
-            cancelText={t('common.no')}
-          >
-            <Button danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      </div>
-      
-      <Card>
-        <Tabs defaultActiveKey="overview" items={items} />
-      </Card>
-      
-      {/* Edit Project Modal */}
-      <Modal
-        title={t('projects.edit')}
-        open={isEditModalVisible}
-        onCancel={() => setIsEditModalVisible(false)}
-        footer={null}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleUpdateProject}
-        >
-          <Form.Item
-            name="name"
-            label={t('projects.name')}
-            rules={[{ required: true, message: t('validation.required') }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label={t('projects.description')}
-          >
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Form.Item
-            name="status"
-            label={t('projects.status')}
-            rules={[{ required: true, message: t('validation.required') }]}
-          >
-            <Select>
-              <Option value="ACTIVE">{t('projects.status.active')}</Option>
-              <Option value="COMPLETED">{t('projects.status.completed')}</Option>
-              <Option value="ON_HOLD">{t('projects.status.onHold')}</Option>
-              <Option value="CANCELLED">{t('projects.status.cancelled')}</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="priority"
-            label={t('projects.priority')}
-          >
-            <Select>
-              <Option value="LOW">{t('projects.priority.low')}</Option>
-              <Option value="MEDIUM">{t('projects.priority.medium')}</Option>
-              <Option value="HIGH">{t('projects.priority.high')}</Option>
-              <Option value="URGENT">{t('projects.priority.urgent')}</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="startDate"
-            label={t('projects.startDate')}
-          >
-            <DatePicker 
-              format="DD/MM/YYYY" 
-              style={{ width: '100%' }}
-              popupStyle={{ zIndex: 1060 }}
-              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
+        <TabPane tab="Phân quyền" key="permissions">
+          <Card>
+            <Table
+              dataSource={project.permissions || []}
+              columns={[
+                {
+                  title: 'Thành viên',
+                  key: 'user',
+                  render: (record: ProjectPermission) => {
+                    const member = (project.members || []).find(m => m.userId === record.userId);
+                    return member ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Avatar size={32}>
+                          {(member.userName || 'U').charAt(0)}
+                        </Avatar>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{member.userName || 'Unknown'}</div>
+                          <div style={{ fontSize: 12, color: '#666' }}>{member.userEmail || 'No email'}</div>
+                        </div>
+                      </div>
+                    ) : 'Không xác định';
+                  }
+                },
+                {
+                  title: 'Quyền',
+                  dataIndex: 'permission',
+                  key: 'permission',
+                  render: (permission: string) => {
+                    const permissionColors = {
+                      'ADMIN': 'red',
+                      'WRITE': 'orange',
+                      'READ': 'blue',
+                      'DELETE': 'purple'
+                    };
+                    return <Tag color={permissionColors[permission as keyof typeof permissionColors]}>{permission}</Tag>;
+                  }
+                },
+                {
+                  title: 'Tài nguyên',
+                  dataIndex: 'resource',
+                  key: 'resource',
+                  render: (resource: string) => {
+                    const resourceLabels = {
+                      'PROJECT': 'Dự án',
+                      'DOCUMENTS': 'Tài liệu',
+                      'TASKS': 'Nhiệm vụ',
+                      'ISSUES': 'Vấn đề',
+                      'CALENDAR': 'Lịch'
+                    };
+                    return resourceLabels[resource as keyof typeof resourceLabels] || resource;
+                  }
+                },
+                {
+                  title: 'Ngày cấp',
+                  dataIndex: 'grantedAt',
+                  key: 'grantedAt',
+                  render: (date: string) => moment(date).format('DD/MM/YYYY')
+                }
+              ]}
+              pagination={false}
             />
-          </Form.Item>
-          <Form.Item
-            name="endDate"
-            label={t('projects.endDate')}
-          >
-            <DatePicker 
-              format="DD/MM/YYYY" 
-              style={{ width: '100%' }}
-              popupStyle={{ zIndex: 1060 }}
-              getPopupContainer={(trigger) => trigger.parentElement as HTMLElement}
-            />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">
-              {t('common.save')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-      
-      {/* Add Member Modal */}
-      <Modal
-        title={t('projects.addMember')}
-        open={isAddMemberModalVisible}
-        onCancel={() => setIsAddMemberModalVisible(false)}
-        footer={null}
-      >
-        <Form
-          form={memberForm}
-          layout="vertical"
-          onFinish={() => {}}
-        >
-          <Form.Item
-            name="userId"
-            label={t('users.select')}
-            rules={[{ required: true, message: t('validation.required') }]}
-          >
-            <Select placeholder={t('users.select')}>
-              {/* User options would be populated from API */}
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="role"
-            label={t('projects.role')}
-            rules={[{ required: true, message: t('validation.required') }]}
-          >
-            <Select>
-              <Option value="ADMIN">{t('roles.admin')}</Option>
-              <Option value="EDITOR">{t('roles.editor')}</Option>
-              <Option value="VIEWER">{t('roles.viewer')}</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">
-              {t('common.add')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Add Note Modal */}
-      <Modal
-        title={t('notes.addNote')}
-        open={isAddNoteModalVisible}
-        onCancel={() => setIsAddNoteModalVisible(false)}
-        footer={null}
-      >
-        <Form
-          form={noteForm}
-          layout="vertical"
-          onFinish={handleAddNote}
-        >
-          <Form.Item
-            name="content"
-            label={t('notes.content')}
-            rules={[{ required: true, message: t('validation.required') }]}
-          >
-            <TextArea rows={4} />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">
-              {t('common.add')}
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Upload Files Modal */}
-      <Modal
-        title={t('uploads.uploadFiles')}
-        open={isUploadModalVisible}
-        onCancel={() => setIsUploadModalVisible(false)}
-        footer={[
-          <Button key="back" onClick={() => setIsUploadModalVisible(false)}>
-            {t('common.cancel')}
-          </Button>,
-          <Button
-            key="submit"
-            type="primary"
-            onClick={handleUpload}
-            loading={uploading}
-            disabled={fileList.length === 0}
-          >
-            {t('common.upload')}
-          </Button>,
-        ]}
-      >
-        <Upload {...uploadProps}>
-          <Button icon={<UploadOutlined />}>{t('common.selectFile')}</Button>
-        </Upload>
-      </Modal>
+          </Card>
+        </TabPane>
+      </Tabs>
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { ApiError } from '../middlewares/errorHandler';
+import { logActivity } from '../utils/activityLogger';
 
 const prisma = new PrismaClient();
 
@@ -16,9 +17,7 @@ const prisma = new PrismaClient();
 export const register = async (req: Request, res: Response) => {
   try {
     console.log('Register request body:', req.body);
-    const { email, password, name, organization, code, middleName, gender, dob, address } = req.body;
-    // role luôn là 'USER' khi đăng ký mới
-    const role = 'USER';
+    const { email, password, name, organization, code, middleName, gender, dob, address, role, phone, department, status } = req.body;
     
     // Validate input
     if (!email || !password || !name) {
@@ -43,7 +42,7 @@ export const register = async (req: Request, res: Response) => {
       email,
       password: hashedPassword,
       name,
-      role,
+      role: role || 'USER', // Use provided role or default to USER
     };
     
     // Add optional fields if provided
@@ -53,10 +52,28 @@ export const register = async (req: Request, res: Response) => {
     if (gender) userData.gender = gender;
     if (address) userData.address = address;
     if (dob) userData.dob = new Date(dob);
+    if (phone) userData.phone = phone;
+    if (department) userData.department = department;
+    if (status) userData.status = status;
     
     console.log('Creating user with data:', { ...userData, password: '[HIDDEN]' });
     
-    const user = await prisma.user.create({ data: userData });
+    const user = await prisma.user.create({ 
+      data: userData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        organization: true,
+        phone: true,
+        department: true,
+        status: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
     console.log('User created:', { id: user.id, email: user.email, role: user.role });
     
     // Generate token
@@ -66,12 +83,17 @@ export const register = async (req: Request, res: Response) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as jwt.SignOptions
     );
     
-    // Return user without password
-    const { password: _, ...userWithoutPassword } = user;
-    
+    // Return user data
     res.status(201).json({
-      user: userWithoutPassword,
+      user: user,
       token
+    });
+    await logActivity({
+      userId: user.id,
+      action: 'register',
+      objectType: 'user',
+      objectId: user.id,
+      description: `Đăng ký tài khoản cho email ${user.email}`
     });
   } catch (error) {
     if (error instanceof ApiError) {
@@ -132,6 +154,13 @@ export const login = async (req: Request, res: Response) => {
     res.status(200).json({
       user: userWithoutPassword,
       token
+    });
+    await logActivity({
+      userId: user.id,
+      action: 'login',
+      objectType: 'user',
+      objectId: user.id,
+      description: `Đăng nhập hệ thống`
     });
   } catch (error) {
     if (error instanceof ApiError) {
@@ -360,6 +389,75 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     } else {
       console.error('Get current user error:', error);
       res.status(500).json({ error: 'Failed to get user information' });
+    }
+  }
+};
+
+/**
+ * Update current user profile
+ * @route PUT /api/auth/me
+ */
+export const updateProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      throw new ApiError(401, 'Authentication required');
+    }
+    
+    const { name, email, organization } = req.body;
+    
+    // Validate input
+    if (!name || !email) {
+      throw new ApiError(400, 'Name and email are required');
+    }
+    
+    // Check if email is already taken by another user
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email,
+        id: { not: userId }
+      }
+    });
+    
+    if (existingUser) {
+      throw new ApiError(409, 'Email is already taken');
+    }
+    
+    // Update user
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name,
+        email,
+        organization: organization || null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        organization: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    
+    res.status(200).json(updatedUser);
+    
+    await logActivity({
+      userId,
+      action: 'update_profile',
+      objectType: 'user',
+      objectId: userId,
+      description: `Cập nhật thông tin cá nhân`
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Update profile error:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
     }
   }
 };

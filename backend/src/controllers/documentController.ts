@@ -5,6 +5,31 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import { logActivity } from '../utils/activityLogger';
+import { 
+  generateISOName, 
+  validateISOMetadata, 
+  getRequiredMetadataFields,
+  formatDocumentMetadata,
+  canTransitionStatus 
+} from '../utils/isoUtils';
+
+// Helper functions for ISO 19650 formatting
+const generateISOPath = (doc: any) => {
+  const projectName = doc.project?.name || 'Project';
+  const status = doc.status?.toLowerCase() || 'wip';
+  const discipline = doc.metadata?.discipline || 'XX';
+  const date = doc.createdAt.toISOString().split('T')[0];
+  return `/${projectName}/${status.toUpperCase()}/${discipline}/${date}/${doc.name}`;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 const prisma = new PrismaClient();
 
@@ -153,8 +178,18 @@ export const getDocuments = async (req: Request, res: Response) => {
       prisma.document.count({ where })
     ]);
     
+    // Transform documents to include ISO 19650 metadata
+    const transformedDocuments = documents.map(doc => ({
+      ...doc,
+      uploader: doc.uploader.name,
+      projectName: doc.project.name,
+      filePath: generateISOPath(doc),
+      fileSize: formatFileSize(doc.fileSize),
+      uploadDate: doc.createdAt.toLocaleString('vi-VN')
+    }));
+
     res.status(200).json({
-      documents,
+      documents: transformedDocuments,
       pagination: {
         total,
         page: Number(page),
@@ -309,12 +344,27 @@ export const uploadDocument = async (req: Request, res: Response) => {
         throw new ApiError(400, 'Invalid metadata format. Must be valid JSON');
       }
     }
+
+    // Validate ISO 19650 metadata
+    const validation = await validateISOMetadata(metadataObj);
+    if (!validation.isValid) {
+      throw new ApiError(400, `Metadata validation failed: ${validation.errors.join(', ')}`);
+    }
+
+    // Generate ISO filename if naming rule is enabled
+    let finalName = name;
+    try {
+      finalName = await generateISOName(req.file.originalname, projectId, metadataObj);
+    } catch (error) {
+      console.warn('Failed to generate ISO filename, using original name:', error);
+    }
     
-    // Create document
+    // Create document with ISO naming
     const document = await prisma.document.create({
       data: {
-        name,
-        description,
+        name: finalName,
+        originalName: req.file.originalname, // Store original filename
+        description: description || req.file.originalname, // Use original name as description if no description provided
         fileUrl: `/uploads/${req.file.filename}`,
         fileSize: req.file.size,
         fileType: path.extname(req.file.originalname).substring(1),
@@ -351,6 +401,17 @@ export const uploadDocument = async (req: Request, res: Response) => {
       },
       uploadedBy: req.user?.id
     });
+    
+    // Ghi log audit trail
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'upload',
+        objectType: 'document',
+        objectId: document.id,
+        description: `Upload tài liệu "${name}"`
+      });
+    }
     
     res.status(201).json(document);
   } catch (error) {
@@ -444,6 +505,28 @@ export const updateDocument = async (req: Request, res: Response) => {
         throw new ApiError(400, 'Invalid metadata format. Must be valid JSON');
       }
     }
+
+    // Validate ISO 19650 metadata if metadata is being updated
+    if (metadata) {
+      const validation = await validateISOMetadata(metadataObj);
+      if (!validation.isValid) {
+        throw new ApiError(400, `Metadata validation failed: ${validation.errors.join(', ')}`);
+      }
+    }
+
+    // Check status transition permissions if container is changing
+    if (containerId && containerId !== document.containerId) {
+      const canTransition = await canTransitionStatus(
+        document.status,
+        status,
+        req.user?.role || 'USER',
+        document.projectId
+      );
+      
+      if (!canTransition) {
+        throw new ApiError(403, 'You do not have permission to perform this status transition');
+      }
+    }
     
     // Update document
     const updatedDocument = await prisma.document.update({
@@ -483,6 +566,17 @@ export const updateDocument = async (req: Request, res: Response) => {
       },
       updatedBy: req.user?.id
     });
+    
+    // Ghi log audit trail
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'update',
+        objectType: 'document',
+        objectId: id,
+        description: `Cập nhật tài liệu "${name}"`
+      });
+    }
     
     res.status(200).json(updatedDocument);
   } catch (error) {
@@ -658,6 +752,17 @@ export const deleteDocument = async (req: Request, res: Response) => {
       deletedBy: req.user?.id
     });
     
+    // Ghi log audit trail
+    if (req.user?.id) {
+      await logActivity({
+        userId: req.user.id,
+        action: 'delete',
+        objectType: 'document',
+        objectId: id,
+        description: `Xoá tài liệu "${document.name}"`
+      });
+    }
+    
     res.status(200).json({ message: 'Document deleted successfully' });
   } catch (error) {
     if (error instanceof ApiError) {
@@ -665,6 +770,132 @@ export const deleteDocument = async (req: Request, res: Response) => {
     } else {
       console.error('Delete document error:', error);
       res.status(500).json({ error: 'Failed to delete document' });
+    }
+  }
+};
+
+/**
+ * Get documents for ISO 19650 interface
+ * @route GET /api/documents/iso
+ */
+export const getDocumentsISO = async (req: Request, res: Response) => {
+  try {
+    const {
+      projectId,
+      status,
+      search,
+      discipline,
+      page = 1,
+      limit = 10
+    } = req.query;
+    
+    const skip = (Number(page) - 1) * Number(limit);
+    
+    // Build filter conditions
+    const where: any = {};
+    
+    // Filter by project
+    if (projectId) {
+      where.projectId = projectId;
+    } else {
+      // If no projectId provided, only show documents from projects the user has access to
+      if (req.user?.role !== 'ADMIN') {
+        where.project = {
+          members: {
+            some: { userId: req.user?.id }
+          }
+        };
+      }
+    }
+    
+    // Filter by status
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+    
+    // Filter by discipline
+    if (discipline && discipline !== 'all') {
+      where.metadata = {
+        path: ['discipline'],
+        equals: discipline
+      };
+    }
+    
+    // Search by name, description, or original name
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { description: { contains: search as string, mode: 'insensitive' } },
+        { originalName: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+    
+    // Get documents with pagination
+    const [documents, total] = await Promise.all([
+      prisma.document.findMany({
+        where,
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          container: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              status: true
+            }
+          },
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: Number(limit)
+      }),
+      prisma.document.count({ where })
+    ]);
+    
+    // Transform documents to include ISO 19650 metadata
+    const transformedDocuments = documents.map(doc => ({
+      id: doc.id,
+      name: doc.name,
+      originalName: doc.originalName || doc.name,
+      description: doc.description || doc.originalName || doc.name,
+      status: doc.status.toLowerCase(),
+      version: `v${doc.version}`,
+      filePath: generateISOPath(doc),
+      uploader: doc.uploader.name,
+      uploadDate: doc.createdAt.toLocaleString('vi-VN'),
+      fileSize: formatFileSize(doc.fileSize),
+      metadata: doc.metadata || {},
+      projectId: doc.projectId,
+      projectName: doc.project.name
+    }));
+
+    res.status(200).json({
+      documents: transformedDocuments,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / Number(limit))
+      }
+    });
+  } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      console.error('Get documents ISO error:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
     }
   }
 };

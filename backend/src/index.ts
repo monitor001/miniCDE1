@@ -21,31 +21,17 @@ import dashboardRoutes from './routes/dashboard';
 import activityRoutes from './routes/activity';
 import calendarRoutes from './routes/calendar';
 import issueRoutes from './routes/issue';
+import activityLogRoutes from './routes/activityLog';
+import isoRoutes from './routes/iso';
+import settingsRoutes from './routes/settings';
 
 // Middlewares
 import { errorHandler } from './middlewares/errorHandler';
 import { authMiddleware } from './middlewares/auth';
+import { auditLogger } from './middlewares/auditLogger';
 
-// Initialize Prisma with connection pooling
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
-  // Connection pooling configuration
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
-});
-
-// Test database connection
-prisma.$connect()
-  .then(() => {
-    console.log('✅ Database connected successfully');
-  })
-  .catch((error) => {
-    console.error('❌ Database connection failed:', error);
-    process.exit(1);
-  });
+// Import prisma from db.ts
+import { prisma } from './db';
 
 // Reminder job: chạy mỗi phút
 cron.schedule('* * * * *', async () => {
@@ -87,7 +73,9 @@ const io = new SocketServer(server, {
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'http://localhost',
-      'http://127.0.0.1'
+      'http://127.0.0.1',
+      'http://localhost:8080',
+      'http://127.0.0.1:8080'
     ],
     methods: ['GET', 'POST'],
     credentials: true
@@ -111,7 +99,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 login attempts per windowMs
+  max: 50, // limit each IP to 50 login attempts per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many login attempts, please try again later.'
@@ -126,23 +114,32 @@ const apiLimiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet());
 app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost',
-    'http://127.0.0.1'
+    'http://127.0.0.1',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080'
   ],
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(helmet());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+
+// Auth middleware chỉ áp dụng cho các routes cần thiết
+// app.use(authMiddleware); // Comment out global auth middleware
+
+// Audit log middleware (log tự động mọi thao tác thay đổi dữ liệu)
+app.use(auditLogger);
 
 // Apply rate limiting
 app.use('/api/auth', authLimiter);
-app.use('/api', apiLimiter);
 app.use(generalLimiter);
+// app.use('/api', apiLimiter); // Comment out global API rate limiter temporarily
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -188,18 +185,41 @@ app.get('/api/test/users', async (req, res) => {
   }
 });
 
+// Test login endpoint
+app.post('/api/test/login', async (req, res) => {
+  try {
+    console.log('Test login endpoint called');
+    res.json({ message: 'Login endpoint accessible' });
+  } catch (error) {
+    res.status(500).json({ error: 'Test failed' });
+  }
+});
+
+// Test auth endpoint
+app.post('/api/test/auth', async (req, res) => {
+  try {
+    console.log('Test auth endpoint called');
+    res.json({ message: 'Auth endpoint accessible' });
+  } catch (error) {
+    res.status(500).json({ error: 'Test failed' });
+  }
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/documents', documentRoutes);
-app.use('/api/containers', containerRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/activities', activityRoutes);
+app.use('/api/projects', authMiddleware, projectRoutes);
+app.use('/api/tasks', authMiddleware, taskRoutes);
+app.use('/api/documents', authMiddleware, documentRoutes);
+app.use('/api/containers', authMiddleware, containerRoutes);
+app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/activities', authMiddleware, activityRoutes);
 app.use('/api/reports', authMiddleware, reportRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
-app.use('/api/calendar', calendarRoutes);
+app.use('/api/calendar', authMiddleware, calendarRoutes);
 app.use('/api/issues', issueRoutes);
+app.use('/api/activity-logs', authMiddleware, activityLogRoutes);
+app.use('/api/iso', authMiddleware, isoRoutes);
+app.use('/api/settings', authMiddleware, settingsRoutes);
 
 // Error handling
 app.use(errorHandler);
@@ -207,7 +227,12 @@ app.use(errorHandler);
 // Socket.IO connection
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
-  
+  socket.on('join-user', (userId: string) => {
+    if (userId) {
+      socket.join(`user:${userId}`);
+      console.log(`User ${socket.id} joined user room user:${userId}`);
+    }
+  });
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });

@@ -11,9 +11,18 @@ import {
   getProjectNotes,
   createProjectNote,
   deleteProjectNote,
+  updateProjectNote,
   uploadProjectImages,
   getProjectImages,
-  deleteProjectImage
+  deleteProjectImage,
+  getProjectComments,
+  createProjectComment,
+  deleteProjectComment,
+  getProjectStats,
+  exportProject,
+  shareProject,
+  getProjectShares,
+  revokeProjectShare
 } from '../controllers/projectController';
 import { authMiddleware, authorize, projectAccess } from '../middlewares/auth';
 
@@ -42,11 +51,28 @@ router.put('/:id/members/:memberId', authMiddleware, projectAccess, updateProjec
 // Project notes
 router.get('/:id/notes', authMiddleware, projectAccess, getProjectNotes);
 router.post('/:id/notes', authMiddleware, projectAccess, createProjectNote);
+router.put('/:id/notes/:noteId', authMiddleware, projectAccess, updateProjectNote);
 router.delete('/:id/notes/:noteId', authMiddleware, projectAccess, deleteProjectNote);
 
 // Project images
 router.get('/:id/images', authMiddleware, projectAccess, getProjectImages);
 router.post('/:id/images', authMiddleware, projectAccess, uploadProjectImages);
 router.delete('/:id/images/:imageId', authMiddleware, projectAccess, deleteProjectImage);
+
+// Project comments
+router.get('/:id/comments', authMiddleware, projectAccess, getProjectComments);
+router.post('/:id/comments', authMiddleware, projectAccess, createProjectComment);
+router.delete('/:id/comments/:commentId', authMiddleware, projectAccess, deleteProjectComment);
+
+// Project statistics
+router.get('/:id/stats', authMiddleware, projectAccess, getProjectStats);
+
+// Project export
+router.get('/:id/export', authMiddleware, projectAccess, exportProject);
+
+// Project sharing
+router.post('/:id/share', authMiddleware, projectAccess, shareProject);
+router.get('/:id/shares', authMiddleware, projectAccess, getProjectShares);
+router.delete('/:id/shares/:shareId', authMiddleware, projectAccess, revokeProjectShare);
 
 export default router; 

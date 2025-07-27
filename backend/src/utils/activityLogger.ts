@@ -8,12 +8,12 @@ export interface ActivityLogData {
   objectType: string;
   objectId: string;
   description?: string;
+  relatedUserIds?: string[]; // Thêm mảng user liên quan
+  notify?: boolean; // Thêm tuỳ chọn notify
 }
 
 export const logActivity = async (data: ActivityLogData) => {
   try {
-    // TODO: Uncomment when ActivityLog model is properly generated
-    /*
     const activity = await prisma.activityLog.create({
       data: {
         userId: data.userId,
@@ -33,23 +33,26 @@ export const logActivity = async (data: ActivityLogData) => {
       }
     });
 
-    // Emit socket event for real-time updates
-    if (global.io) {
-      global.io.emit('activity:new', {
-        id: activity.id,
-        action: activity.action,
-        objectType: activity.objectType,
-        objectId: activity.objectId,
-        description: activity.description,
-        user: activity.user,
-        createdAt: activity.createdAt
+    // Chỉ emit socket event nếu notify=true
+    if (data.notify && global.io) {
+      const userIds = Array.from(new Set([
+        data.userId,
+        ...(data.relatedUserIds || [])
+      ])).filter(Boolean);
+      userIds.forEach(uid => {
+        global.io.to(`user:${uid}`).emit('activity:new', {
+          id: activity.id,
+          action: activity.action,
+          objectType: activity.objectType,
+          objectId: activity.objectId,
+          description: activity.description,
+          user: activity.user,
+          createdAt: activity.createdAt
+        });
       });
     }
 
     return activity;
-    */
-    console.log('Activity logged:', data);
-    return null;
   } catch (error) {
     console.error('Error logging activity:', error);
     return null;

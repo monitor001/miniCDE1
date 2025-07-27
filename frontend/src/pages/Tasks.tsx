@@ -48,6 +48,11 @@ import {
   MessageOutlined
 } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
+import { ViewMode, Gantt, Task as GanttTask } from 'gantt-task-react';
+import 'gantt-task-react/dist/index.css';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 
 const { Option } = Select;
 const { Text, Title } = Typography;
@@ -114,7 +119,7 @@ const Tasks: React.FC = () => {
   const [historyDrawer, setHistoryDrawer] = useState(false);
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [historyTaskId, setHistoryTaskId] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table');
   const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
   const [commentTask, setCommentTask] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
@@ -368,9 +373,13 @@ const Tasks: React.FC = () => {
       }
       
       const submitData = {
-        ...values,
+        title: values.title,
+        description: values.description,
+        status: values.status,
+        priority: values.priority || 'MEDIUM',
         dueDate: values.dueDate ? values.dueDate.format() : undefined,
         assigneeId: values.assigneeId || undefined,
+        projectId: values.projectId
       };
 
       if (editingTask) {
@@ -438,6 +447,73 @@ const Tasks: React.FC = () => {
     return <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: color + '22', marginRight: 4 }}>{icon}</span>;
   };
 
+  // Sắp xếp dự án theo trạng thái và mức độ ưu tiên (như bên thẻ dự án)
+  const getSortedProjects = () => {
+    const statusOrder = {
+      'ACTIVE': 1,      // Đang thực hiện
+      'PLANNING': 2,    // Đang lên kế hoạch
+      'ON_HOLD': 3,     // Đang tạm dừng
+      'COMPLETED': 4,   // Hoàn thành
+      'ARCHIVED': 5     // Lưu trữ
+    };
+
+    return projects.sort((a, b) => {
+      const statusA = statusOrder[a.status as keyof typeof statusOrder] || 999;
+      const statusB = statusOrder[b.status as keyof typeof statusOrder] || 999;
+      
+      if (statusA !== statusB) {
+        return statusA - statusB;
+      }
+      
+      // Nếu cùng trạng thái, sắp xếp theo mức độ ưu tiên (chỉ áp dụng cho ACTIVE)
+      if (a.status === 'ACTIVE' && b.status === 'ACTIVE') {
+        const priorityOrder = {
+          'HIGH': 1,        // Cao
+          'MEDIUM': 2,      // Trung bình
+          'LOW': 3          // Thấp
+        };
+        const priorityA = priorityOrder[a.priority as keyof typeof priorityOrder] || 999;
+        const priorityB = priorityOrder[b.priority as keyof typeof priorityOrder] || 999;
+        return priorityA - priorityB;
+      }
+      
+      // Các trạng thái khác sắp xếp theo tên dự án
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  // Sắp xếp nhiệm vụ trong 1 dự án theo ưu tiên từ cao tới thấp
+  const getSortedTasksForProject = (projectId: string) => {
+    const projectTasks = tasks.filter(t => t.projectId === projectId);
+    const priorityOrder = {
+      'URGENT': 1,
+      'HIGH': 2,
+      'MEDIUM': 3,
+      'LOW': 4
+    };
+
+    return projectTasks.sort((a, b) => {
+      const priorityA = priorityOrder[a.priority as keyof typeof priorityOrder] || 999;
+      const priorityB = priorityOrder[b.priority as keyof typeof priorityOrder] || 999;
+      return priorityA - priorityB;
+    });
+  };
+
+  // Chuyển đổi dữ liệu tasks sang định dạng Gantt
+  const getGanttTasks = (): GanttTask[] => {
+    return tasks.map((task) => ({
+      id: task.id,
+      name: task.title,
+      start: task.dueDate ? new Date(task.dueDate) : new Date(),
+      end: task.dueDate ? new Date(task.dueDate) : new Date(),
+      type: 'task',
+      progress: task.status === 'COMPLETED' ? 100 : 0,
+      isDisabled: false,
+      styles: { progressColor: '#1890ff', progressSelectedColor: '#52c41a' },
+      project: task.project?.name || '',
+    }));
+  };
+
   const columns = [
     {
       title: 'Tên công việc',
@@ -455,12 +531,6 @@ const Tasks: React.FC = () => {
           )}
         </div>
       )
-    },
-    {
-      title: 'Dự án',
-      dataIndex: ['project', 'name'],
-      key: 'project',
-      render: (text: string) => <Tag color="blue">{text}</Tag>
     },
     {
       title: 'Người thực hiện',
@@ -514,9 +584,9 @@ const Tasks: React.FC = () => {
       )
     },
     {
-             title: 'Thao tác',
-       key: 'actions',
-       render: (_: any, record: any) => (
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_: any, record: any) => (
         <Space>
           <Button size="small" onClick={() => handleEdit(record)}>
             Sửa
@@ -633,12 +703,44 @@ const Tasks: React.FC = () => {
     overdue: tasks.filter(t => t.dueDate && moment(t.dueDate).isBefore(moment(), 'day')).length
   };
 
-  // Nhóm tasks theo projectId
-  const groupedTasks = projects.map(project => ({
+  // Nhóm tasks theo projectId với sắp xếp
+  const groupedTasks = getSortedProjects().map(project => ({
     key: project.id,
     project,
-    tasks: tasks.filter(t => t.projectId === project.id),
+    tasks: getSortedTasksForProject(project.id),
   })).filter(g => g.tasks.length > 0);
+
+  // Hàm xuất PDF cho chế độ bảng
+  const handleExportTable = () => {
+    const doc = new jsPDF();
+    const tableData = tasks.map((task, idx) => [
+      idx + 1,
+      task.title,
+      task.project?.name || '',
+      task.assignee?.name || '',
+      task.status,
+      task.priority,
+      task.dueDate ? moment(task.dueDate).format('DD/MM/YYYY') : ''
+    ]);
+    autoTable(doc, {
+      head: [['#', 'Tên nhiệm vụ', 'Dự án', 'Người thực hiện', 'Trạng thái', 'Ưu tiên', 'Hạn hoàn thành']],
+      body: tableData,
+    });
+    doc.save('tasks-report.pdf');
+  };
+  // Hàm xuất hình ảnh cho chế độ Gantt
+  const handleExportGantt = async () => {
+    const ganttEl = document.querySelector('.gantt-container');
+    if (ganttEl) {
+      const canvas = await html2canvas(ganttEl as HTMLElement);
+      const link = document.createElement('a');
+      link.download = 'tasks-gantt.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    } else {
+      message.error('Không tìm thấy biểu đồ Gantt để xuất!');
+    }
+  };
 
   return (
     <div style={{ padding: '24px' }}>
@@ -850,7 +952,7 @@ const Tasks: React.FC = () => {
                 rules={[{ required: true, message: 'Vui lòng chọn dự án!' }]}
               >
                 <Select placeholder="Chọn dự án">
-                  {projects.map(project => (
+                  {getSortedProjects().map(project => (
                     <Option key={project.id} value={project.id}>
                       {project.name}
                     </Option>

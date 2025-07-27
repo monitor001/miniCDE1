@@ -7,6 +7,7 @@ import {
   enableTwoFactor,
   disableTwoFactor,
   getCurrentUser,
+  updateProfile,
   forgotPassword,
   resetPassword
 } from '../controllers/authController';
@@ -23,6 +24,7 @@ router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.get('/me', authMiddleware, getCurrentUser);
+router.put('/me', authMiddleware, updateProfile);
 router.post('/setup-2fa', authMiddleware, setupTwoFactor);
 router.post('/enable-2fa', authMiddleware, enableTwoFactor);
 router.post('/disable-2fa', authMiddleware, disableTwoFactor);

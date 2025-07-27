@@ -7,6 +7,7 @@ import {
   uploadNewVersion,
   deleteDocument,
   getDocumentHistory,
+  getDocumentsISO,
   upload
 } from '../controllers/documentController';
 import { authMiddleware } from '../middlewares/auth';
@@ -19,11 +20,14 @@ router.use(authMiddleware);
 // Get documents with filtering and pagination
 router.get('/', getDocuments);
 
+// Get documents for ISO 19650 interface
+router.get('/iso', getDocumentsISO);
+
 // Get document by ID
 router.get('/:id', getDocumentById);
 
 // Upload file only (for frontend file upload)
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', upload.single('file') as any, (req: any, res: any) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -42,13 +46,13 @@ router.post('/upload', upload.single('file'), (req, res) => {
 });
 
 // Upload document
-router.post('/', upload.single('file'), uploadDocument);
+router.post('/', upload.single('file') as any, uploadDocument);
 
 // Update document metadata
 router.put('/:id', updateDocument);
 
 // Upload new version of document
-router.post('/:id/version', upload.single('file'), uploadNewVersion);
+router.post('/:id/version', upload.single('file') as any, uploadNewVersion);
 
 // Delete document
 router.delete('/:id', deleteDocument);

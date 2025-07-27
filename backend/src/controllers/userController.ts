@@ -54,11 +54,19 @@ export const getUsers = async (req: Request, res: Response) => {
           createdAt: true,
           updatedAt: true,
           twoFactorSecret: true,
-          _count: {
+          // Add missing fields that frontend expects
+          lastLogin: true,
+          department: true,
+          phone: true,
+          status: true,
+          projects: {
             select: {
-              projects: true,
-              documents: true,
-              tasks: true
+              project: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
             }
           }
         },
@@ -69,11 +77,12 @@ export const getUsers = async (req: Request, res: Response) => {
       prisma.user.count({ where })
     ]);
     
-    // Transform users to hide sensitive info
+    // Transform users to hide sensitive info and format projects
     const transformedUsers = users.map(user => ({
       ...user,
       twoFactorEnabled: !!user.twoFactorSecret,
-      twoFactorSecret: undefined
+      twoFactorSecret: undefined,
+      projects: user.projects.map((pm: any) => pm.project.name)
     }));
     
     res.status(200).json({
@@ -262,7 +271,7 @@ export const createUser = async (req: Request, res: Response) => {
       throw new ApiError(403, 'Forbidden: Only admins can create users');
     }
     
-    const { email, password, name, role, organization } = req.body;
+    const { email, password, name, role, organization, phone, department, status } = req.body;
     
     // Validate input
     if (!email || !password || !name || !role) {
@@ -282,21 +291,33 @@ export const createUser = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     
+    // Prepare user data
+    const userData: any = {
+      email,
+      password: hashedPassword,
+      name,
+      role,
+      organization
+    };
+    
+    // Add optional fields if provided
+    if (phone) userData.phone = phone;
+    if (department) userData.department = department;
+    if (status) userData.status = status;
+    
     // Create user
     const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        role,
-        organization
-      },
+      data: userData,
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
         organization: true,
+        phone: true,
+        department: true,
+        status: true,
+        lastLogin: true,
         createdAt: true,
         updatedAt: true
       }
@@ -320,7 +341,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, role, organization, password } = req.body;
+    const { name, role, organization, password, phone, department, status, projects } = req.body;
     
     // Users can only update their own profile unless they're admins
     if (req.user?.role !== 'ADMIN' && req.user?.id !== id) {
@@ -346,6 +367,9 @@ export const updateUser = async (req: Request, res: Response) => {
     
     if (name) updateData.name = name;
     if (organization) updateData.organization = organization;
+    if (phone) updateData.phone = phone;
+    if (department) updateData.department = department;
+    if (status) updateData.status = status;
     if (role && req.user?.role === 'ADMIN') updateData.role = role;
     
     // Hash password if provided
@@ -364,10 +388,33 @@ export const updateUser = async (req: Request, res: Response) => {
         name: true,
         role: true,
         organization: true,
+        phone: true,
+        department: true,
+        status: true,
+        lastLogin: true,
         createdAt: true,
         updatedAt: true
       }
     });
+    
+    // Handle project memberships if provided
+    if (projects && Array.isArray(projects)) {
+      // First, remove all existing project memberships
+      await prisma.projectMember.deleteMany({
+        where: { userId: id }
+      });
+      
+      // Then add new project memberships
+      for (const projectId of projects) {
+        await prisma.projectMember.create({
+          data: {
+            userId: id,
+            projectId: projectId,
+            role: 'USER' // Default role for project membership
+          }
+        });
+      }
+    }
     
     res.status(200).json(updatedUser);
   } catch (error) {

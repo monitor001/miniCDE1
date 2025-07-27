@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { message } from 'antd';
+import { App } from 'antd';
 
 // Base URL
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
@@ -47,35 +47,35 @@ axiosInstance.interceptors.response.use(
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           // Don't redirect automatically, let components handle it
-          message.error('Authentication failed. Please log in again.');
+          console.error('Authentication failed. Please log in again.');
           break;
         
         case 403:
           // Forbidden
-          message.error('You do not have permission to perform this action.');
+          console.error('You do not have permission to perform this action.');
           break;
         
         case 404:
           // Not found
-          message.error('The requested resource was not found.');
+          console.error('The requested resource was not found.');
           break;
         
         case 500:
           // Server error
-          message.error('An error occurred on the server. Please try again later.');
+          console.error('An error occurred on the server. Please try again later.');
           break;
         
         default:
           // Other errors
           if (response.data && response.data.error) {
-            message.error(response.data.error);
+            console.error(response.data.error);
           } else {
-            message.error('An unexpected error occurred.');
+            console.error('An unexpected error occurred.');
           }
       }
     } else {
       // Network error
-      message.error('Network error. Please check your connection.');
+      console.error('Network error. Please check your connection.');
     }
     
     return Promise.reject(error);

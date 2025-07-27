@@ -20,6 +20,10 @@ model User {
   gender          String?         // Gender
   dob             DateTime?       // Date of birth
   address         String?         // Address
+  phone           String?         // Phone number
+  department      String?         // Department
+  status          String          @default("active") // active, inactive
+  lastLogin       DateTime?       // Last login timestamp
   role            Role            @default(USER)
   organization    String?
   twoFactorSecret String?
@@ -36,9 +40,17 @@ model User {
   calendarEvents  CalendarEvent[]
   reports         Report[]
   calendarEventAttendees CalendarEventAttendee[]
+  
+  // New relations for role management
+  rolePermissions RolePermission[]
+  isoConfigs      ISOConfig[]
+  systemSettings  SystemSetting[]
+  grantedPermissions RolePermission[] @relation("PermissionGrantedBy")
+  isoConfigsUpdated ISOConfig[] @relation("ISOConfigUpdatedBy")
+  systemSettingsUpdated SystemSetting[] @relation("SystemSettingUpdatedBy")
+  projectShares   ProjectShare[] @relation("ProjectSharedBy")
 
   @@index([email])
-  @@index([role])
   @@index([organization])
   @@index([createdAt])
 }
@@ -67,8 +79,10 @@ model Project {
   tasks       Task[]
   containers  Container[]
   notes       ProjectNote[]   // Relation to project notes
+  comments    Comment[]       // Relation to project comments
   issues      Issue[]
   calendarEvents CalendarEvent[]
+  projectShares ProjectShare[]
 
   @@index([status])
   @@index([priority])
@@ -84,6 +98,7 @@ model Project {
 // Project Note model for storing notes
 model ProjectNote {
   id        String   @id @default(uuid())
+  title     String
   content   String
   project   Project  @relation(fields: [projectId], references: [id])
   projectId String
@@ -118,8 +133,6 @@ model ProjectMember {
   @@unique([userId, projectId])
   @@index([projectId])
   @@index([userId])
-  @@index([role])
-  @@index([projectId, role])
 }
 
 model Container {
@@ -148,7 +161,8 @@ enum ContainerStatus {
 
 model Document {
   id           String            @id @default(uuid())
-  name         String
+  name         String            // ISO 19650 formatted filename
+  originalName String?           // Original uploaded filename
   description  String?
   fileUrl      String
   fileSize     Int
@@ -264,19 +278,27 @@ model TaskDocument {
 }
 
 model Comment {
-  id        String   @id @default(uuid())
-  content   String
-  task      Task     @relation(fields: [taskId], references: [id])
-  taskId    String
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  content    String
+  task       Task?    @relation(fields: [taskId], references: [id])
+  taskId     String?
+  issue      Issue?   @relation(fields: [issueId], references: [id])
+  issueId    String?
+  project    Project? @relation(fields: [projectId], references: [id])
+  projectId  String?
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  attachments Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([taskId])
+  @@index([issueId])
+  @@index([projectId])
   @@index([userId])
   @@index([createdAt])
   @@index([taskId, createdAt])
+  @@index([projectId, createdAt])
 }
 
 model TaskHistory {
@@ -325,6 +347,7 @@ model Issue {
   createdById String?
   assignee    User?    @relation("IssueAssignee", fields: [assigneeId], references: [id])
   assigneeId  String?
+  comments    Comment[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -368,4 +391,120 @@ model Report {
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdById String?
   createdAt   DateTime @default(now())
+}
+
+// ISO 19650 Configuration Models
+model ISOConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique // 'document_statuses', 'metadata_fields', 'approval_steps', 'file_naming'
+  value       Json     // Configuration data
+  description String?
+  isActive    Boolean  @default(true)
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdById String?
+  updatedBy   User?    @relation("ISOConfigUpdatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+// Permission and Role Management
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique // 'manage_users', 'manage_projects', etc.
+  name        String
+  nameVi      String
+  description String?
+  category    String   // 'user_management', 'project_management', 'document_management', etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@index([code])
+  @@index([category])
+  @@index([isActive])
+}
+
+model UserRole {
+  id          String   @id @default(uuid())
+  code        String   @unique // 'admin', 'project_manager', 'editor', 'approver', 'viewer'
+  name        String
+  nameVi      String
+  color       String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         UserRole   @relation(fields: [roleId], references: [id])
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  permissionId String
+  granted      Boolean    @default(true)
+  grantedBy    User?      @relation("PermissionGrantedBy", fields: [grantedById], references: [id])
+  grantedById  String?
+  grantedAt    DateTime   @default(now())
+  user         User?      @relation(fields: [userId], references: [id])
+  userId       String?
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([granted])
+  @@index([grantedAt])
+  @@index([userId])
+}
+
+// System Settings
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique // 'site_name', 'logo_url', 'email_settings', etc.
+  value       String
+  description String?
+  category    String   // system, user, project, etc.
+  isActive    Boolean  @default(true)
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdById String?
+  updatedBy   User?    @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([category])
+  @@index([isActive])
+}
+
+model ProjectShare {
+  id        String   @id @default(uuid())
+  project   Project  @relation(fields: [projectId], references: [id])
+  projectId String
+  sharedBy  User     @relation("ProjectSharedBy", fields: [sharedById], references: [id])
+  sharedById String
+  sharedWith String  // Email of the person being shared with
+  message   String?  // Optional message
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED, REVOKED
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([sharedById])
+  @@index([sharedWith])
+  @@index([status])
+  @@index([createdAt])
 }
