@@ -276,3 +276,5 @@ server.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
 }); 
+
+// Trigger Heroku rebuild

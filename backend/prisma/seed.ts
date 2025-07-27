@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import dayjs from 'dayjs';
+import bcrypt from 'bcryptjs';
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -12,6 +14,18 @@ async function main() {
       email: 'demo@cde.com',
       password: '123456',
       name: 'Demo User',
+      role: 'ADMIN',
+    },
+  });
+
+  // Thêm tài khoản admin mới theo yêu cầu
+  const admin2 = await prisma.user.upsert({
+    where: { email: 'nguyenthanhvc@gmail.com' },
+    update: {},
+    create: {
+      email: 'nguyenthanhvc@gmail.com',
+      password: await bcrypt.hash('Ab5463698664#', 10),
+      name: 'Nguyen Thanh',
       role: 'ADMIN',
     },
   });
