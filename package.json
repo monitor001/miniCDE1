@@ -1,37 +1,22 @@
 {
-  "name": "minicde",
+  "name": "minicde-frontend",
   "version": "1.0.0",
-  "description": "Mini CDE Project",
+  "description": "MiniCDE Frontend Application",
+  "main": "server.js",
   "scripts": {
-    "start": "cd backend && npm start",
-    "build": "npm run build:backend",
-    "build:backend": "cd backend && npm install && npm run build",
-    "build:frontend": "cd frontend && npm install --legacy-peer-deps && npm run build",
-    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps",
-    "postgres:setup": "./scripts/postgres-setup.sh",
-    "postgres:start": "docker-compose up -d postgres",
-    "postgres:stop": "docker-compose down",
-    "db:migrate": "cd backend && npm run db:migrate",
-    "db:seed": "cd backend && npm run db:seed",
-    "db:studio": "cd backend && npm run db:studio"
-  },
-  "dependencies": {
-    "antd": "^5.26.6",
-    "axios": "^1.11.0",
-    "chart.js": "^4.5.0",
-    "concurrently": "^8.2.2",
-    "multer": "^2.0.2",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.5",
-    "react-chartjs-2": "^5.3.0"
-  },
-  "devDependencies": {
-    "@types/multer": "^2.0.0",
-    "typescript": "^5.8.3"
+    "start": "node server.js",
+    "build": "echo 'Build completed'",
+    "postinstall": "echo 'Postinstall completed'"
   },
   "engines": {
     "node": "18.x",
     "npm": "9.x"
-  }
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "path": "^0.12.7"
+  },
+  "keywords": ["minicde", "frontend", "react"],
+  "author": "MiniCDE Team",
+  "license": "MIT"
 }
