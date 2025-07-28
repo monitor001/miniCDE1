@@ -518,18 +518,20 @@ export const deleteProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    console.log('Deleting project with ID:', id);
-    console.log('User:', req.user);
-    
-    // Check if project exists
+    // Check if project exists with minimal data
     const existingProject = await prisma.project.findUnique({
       where: { id },
-      include: {
-        members: true
+      select: {
+        id: true,
+        name: true,
+        members: {
+          select: {
+            userId: true,
+            role: true
+          }
+        }
       }
     });
-    
-    console.log('Found project:', existingProject ? 'yes' : 'no');
     
     if (!existingProject) {
       throw new ApiError(404, 'Project not found');
@@ -537,94 +539,81 @@ export const deleteProject = async (req: Request, res: Response) => {
     
     // Check if user has permission to delete the project
     if (req.user?.role !== 'ADMIN') {
-      const userMembership = existingProject.members.find((member: Member) => member.userId === req.user?.id);
-      
-      console.log('User membership:', userMembership);
+      const userMembership = existingProject.members.find((member: any) => member.userId === req.user?.id);
       
       if (!userMembership || userMembership.role !== 'PROJECT_MANAGER') {
         throw new ApiError(403, 'You do not have permission to delete this project');
       }
     }
     
-    // Delete related records first to avoid foreign key constraint errors
-    console.log('Deleting related records for project:', id);
+    // Send response immediately to avoid timeout
+    res.status(200).json({ message: 'Project deletion in progress' });
     
-    // Get all tasks for this project
-    const tasks = await prisma.task.findMany({
-      where: { projectId: id },
-      select: { id: true }
-    });
-    
-    const taskIds = tasks.map(task => task.id);
-    
-    // Delete task history records
-    if (taskIds.length > 0) {
-      await prisma.taskHistory.deleteMany({
-        where: { taskId: { in: taskIds } }
+    // Use Prisma transaction for better performance and reliability
+    await prisma.$transaction(async (prisma) => {
+      // Delete related records in an optimized order
+      
+      // 1. Delete activity logs first (no dependencies)
+      await prisma.activityLog.deleteMany({
+        where: {
+          objectId: id,
+          objectType: 'project'
+        }
       });
       
-      // Delete comments
-      await prisma.comment.deleteMany({
-        where: { projectId: { in: taskIds } }
-      });
+      // 2. Get task IDs for this project (needed for related deletions)
+      const taskIds = await prisma.task.findMany({
+        where: { projectId: id },
+        select: { id: true }
+      }).then(tasks => tasks.map(task => task.id));
       
-      // Delete task-document relationships
-      await prisma.taskDocument.deleteMany({
-        where: { taskId: { in: taskIds } }
-      });
-    }
-    
-    // Delete documents
-    await prisma.documentHistory.deleteMany({
-      where: { document: { projectId: id } }
-    });
-    
-    await prisma.document.deleteMany({
-      where: { projectId: id }
-    });
-    
-    // Delete tasks
-    await prisma.task.deleteMany({
-      where: { projectId: id }
-    });
-    
-    // Delete containers
-    await prisma.container.deleteMany({
-      where: { projectId: id }
-    });
-    
-    // Delete project members
-    await prisma.projectMember.deleteMany({
-      where: { projectId: id }
-    });
-
-    // Delete project notes
-    await prisma.projectNote.deleteMany({
-      where: { projectId: id }
-    });
-
-    // Delete issues
-    await prisma.issue.deleteMany({
-      where: { projectId: id }
-    });
-
-    // Delete calendar events
-    await prisma.calendarEvent.deleteMany({
-      where: { projectId: id }
-    });
-
-    // Delete activity logs liên quan đến project
-    await prisma.activityLog.deleteMany({
-      where: {
-        objectId: id,
-        objectType: 'project'
+      // 3. Delete task-related records if there are tasks
+      if (taskIds.length > 0) {
+        // Delete task history records
+        await prisma.taskHistory.deleteMany({
+          where: { taskId: { in: taskIds } }
+        });
+        
+        // Delete task comments
+        await prisma.comment.deleteMany({
+          where: { taskId: { in: taskIds } }
+        });
+        
+        // Delete task-document relationships
+        await prisma.taskDocument.deleteMany({
+          where: { taskId: { in: taskIds } }
+        });
       }
-    });
-
-    // Finally delete the project
-    console.log('Deleting project itself:', id);
-    await prisma.project.delete({
-      where: { id }
+      
+      // 4. Delete document histories
+      await prisma.documentHistory.deleteMany({
+        where: { document: { projectId: id } }
+      });
+      
+      // 5. Delete documents
+      await prisma.document.deleteMany({
+        where: { projectId: id }
+      });
+      
+      // 6. Delete tasks
+      await prisma.task.deleteMany({
+        where: { projectId: id }
+      });
+      
+      // 7. Delete other project-related records
+      await Promise.all([
+        // These can be deleted in parallel
+        prisma.container.deleteMany({ where: { projectId: id } }),
+        prisma.projectNote.deleteMany({ where: { projectId: id } }),
+        prisma.issue.deleteMany({ where: { projectId: id } }),
+        prisma.calendarEvent.deleteMany({ where: { projectId: id } }),
+        prisma.projectMember.deleteMany({ where: { projectId: id } })
+      ]);
+      
+      // 8. Finally delete the project
+      await prisma.project.delete({
+        where: { id }
+      });
     });
     
     // Notify project deletion via Socket.IO
@@ -645,15 +634,17 @@ export const deleteProject = async (req: Request, res: Response) => {
       });
     }
     
-    console.log('Project deleted successfully:', id);
-    res.status(200).json({ message: 'Project deleted successfully' });
+    // Response already sent
   } catch (error) {
     console.error('Delete project error:', error);
     
-    if (error instanceof ApiError) {
-      res.status(error.statusCode).json({ error: error.message });
-    } else {
-      res.status(500).json({ error: 'Failed to delete project' });
+    // Only send error response if response hasn't been sent yet
+    if (!res.headersSent) {
+      if (error instanceof ApiError) {
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to delete project' });
+      }
     }
   }
 };
