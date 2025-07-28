@@ -29,7 +29,7 @@ axiosInstance.interceptors.request.use(
     }
     
     // Add request timestamp for debugging
-    config.metadata = { startTime: new Date() };
+    (config as any).metadata = { startTime: new Date() };
     
     return config;
   },
@@ -43,7 +43,7 @@ axiosInstance.interceptors.response.use(
   (response) => {
     // Log response time for debugging
     const endTime = new Date();
-    const startTime = response.config.metadata?.startTime;
+    const startTime = (response.config as any).metadata?.startTime;
     if (startTime) {
       const duration = endTime.getTime() - startTime.getTime();
       console.log(`API Request completed in ${duration}ms:`, response.config.url);
