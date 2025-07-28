@@ -262,9 +262,9 @@ export const createProject = async (req: Request, res: Response) => {
     }
     
     // Validate status
-    const validStatuses = ['PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
+    const validStatuses = ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
     if (!validStatuses.includes(status)) {
-      throw new ApiError(400, 'Invalid project status');
+      throw new ApiError(400, `Invalid project status: ${status}. Valid values are: ${validStatuses.join(', ')}`);
     }
     
     // Validate dates if provided
