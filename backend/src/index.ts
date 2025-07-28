@@ -69,9 +69,11 @@ const server = http.createServer(app);
 // CORS configuration for production
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://your-actual-heroku-app-name.herokuapp.com',
-        'https://your-frontend-domain.com',
+    ? process.env.CORS_ORIGIN 
+      ? [process.env.CORS_ORIGIN]
+      : [
+        'https://minicde-frontend-833302d6ab3c.herokuapp.com',
+        'https://minicde-production-589be4b0d52b.herokuapp.com',
         'https://*.herokuapp.com', // Allow any Heroku subdomain
         'https://*.vercel.app',    // Allow Vercel deployments
         'https://*.netlify.app'    // Allow Netlify deployments
