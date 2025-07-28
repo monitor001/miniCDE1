@@ -228,6 +228,7 @@ model Task {
   description String?
   status      TaskStatus
   priority    Priority
+  startDate   DateTime?     // Ngày bắt đầu công việc
   dueDate     DateTime?
   assignee    User?          @relation(fields: [assigneeId], references: [id])
   assigneeId  String?
@@ -244,6 +245,7 @@ model Task {
   @@index([status])
   @@index([priority])
   @@index([dueDate])
+  @@index([startDate])
   @@index([createdAt])
   @@index([updatedAt])
   @@index([title])

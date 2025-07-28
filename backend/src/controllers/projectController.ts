@@ -295,13 +295,13 @@ export const createProject = async (req: Request, res: Response) => {
     const project = await prisma.$transaction(async (prisma) => {
       // First create the project
       const newProject = await prisma.project.create({
-        data: {
+      data: {
           name: name.trim(),
           description: description ? description.trim() : null,
-          status,
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
-          priority: priority || null,
+        status,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+        priority: priority || null,
         }
       });
       
@@ -310,13 +310,13 @@ export const createProject = async (req: Request, res: Response) => {
         // Add current user as project manager
         await prisma.projectMember.create({
           data: {
-            userId: req.user?.id as string,
+              userId: req.user?.id as string,
             projectId: newProject.id,
-            role: Role.PROJECT_MANAGER
+              role: Role.PROJECT_MANAGER
           }
         });
         
-        // Add other members if provided
+            // Add other members if provided
         if (validatedMemberIds.length > 0) {
           await prisma.projectMember.createMany({
             data: validatedMemberIds.map((memberId: string) => ({
@@ -360,34 +360,34 @@ export const createProject = async (req: Request, res: Response) => {
     
     // Create default containers according to ISO 19650
     try {
-      await prisma.container.createMany({
-        data: [
-          {
-            name: 'Work in Progress',
-            code: 'WIP',
-            status: 'WORK_IN_PROGRESS',
-            projectId: project.id
-          },
-          {
-            name: 'Shared',
-            code: 'S',
-            status: 'SHARED',
-            projectId: project.id
-          },
-          {
-            name: 'Published',
-            code: 'P',
-            status: 'PUBLISHED',
-            projectId: project.id
-          },
-          {
-            name: 'Archive',
-            code: 'A',
-            status: 'ARCHIVED',
-            projectId: project.id
-          }
-        ]
-      });
+    await prisma.container.createMany({
+      data: [
+        {
+          name: 'Work in Progress',
+          code: 'WIP',
+          status: 'WORK_IN_PROGRESS',
+          projectId: project.id
+        },
+        {
+          name: 'Shared',
+          code: 'S',
+          status: 'SHARED',
+          projectId: project.id
+        },
+        {
+          name: 'Published',
+          code: 'P',
+          status: 'PUBLISHED',
+          projectId: project.id
+        },
+        {
+          name: 'Archive',
+          code: 'A',
+          status: 'ARCHIVED',
+          projectId: project.id
+        }
+      ]
+    });
     } catch (error) {
       console.error('Error creating default containers:', error);
       // Continue execution even if container creation fails
@@ -395,11 +395,11 @@ export const createProject = async (req: Request, res: Response) => {
     
     // Notify project creation via Socket.IO
     try {
-      global.io.emit('project:created', {
-        id: project.id,
-        name: project.name,
-        createdBy: req.user?.id
-      });
+    global.io.emit('project:created', {
+      id: project.id,
+      name: project.name,
+      createdBy: req.user?.id
+    });
     } catch (error) {
       console.error('Error emitting socket event:', error);
     }
@@ -407,14 +407,14 @@ export const createProject = async (req: Request, res: Response) => {
     // Log activity
     if (req.user?.id) {
       try {
-        await logActivity({
-          userId: req.user.id,
-          action: 'create',
-          objectType: 'project',
-          objectId: project.id,
-          description: `Tạo dự án mới: "${project.name}"`,
-          notify: true
-        });
+      await logActivity({
+        userId: req.user.id,
+        action: 'create',
+        objectType: 'project',
+        objectId: project.id,
+        description: `Tạo dự án mới: "${project.name}"`,
+        notify: true
+      });
       } catch (error) {
         console.error('Error logging activity:', error);
       }
@@ -578,7 +578,7 @@ export const deleteProject = async (req: Request, res: Response) => {
           select: {
             userId: true,
             role: true
-          }
+      }
         }
       }
     });
@@ -610,46 +610,46 @@ export const deleteProject = async (req: Request, res: Response) => {
           objectType: 'project'
         }
       });
-      
+    
       // 2. Get task IDs for this project (needed for related deletions)
       const taskIds = await prisma.task.findMany({
-        where: { projectId: id },
-        select: { id: true }
+      where: { projectId: id },
+      select: { id: true }
       }).then(tasks => tasks.map(task => task.id));
-      
+    
       // 3. Delete task-related records if there are tasks
-      if (taskIds.length > 0) {
+    if (taskIds.length > 0) {
         // Delete task history records
-        await prisma.taskHistory.deleteMany({
-          where: { taskId: { in: taskIds } }
-        });
-        
+      await prisma.taskHistory.deleteMany({
+        where: { taskId: { in: taskIds } }
+      });
+      
         // Delete task comments
-        await prisma.comment.deleteMany({
+      await prisma.comment.deleteMany({
           where: { taskId: { in: taskIds } }
-        });
-        
-        // Delete task-document relationships
-        await prisma.taskDocument.deleteMany({
-          where: { taskId: { in: taskIds } }
-        });
-      }
+      });
       
+      // Delete task-document relationships
+      await prisma.taskDocument.deleteMany({
+        where: { taskId: { in: taskIds } }
+      });
+    }
+    
       // 4. Delete document histories
-      await prisma.documentHistory.deleteMany({
-        where: { document: { projectId: id } }
-      });
-      
+    await prisma.documentHistory.deleteMany({
+      where: { document: { projectId: id } }
+    });
+    
       // 5. Delete documents
-      await prisma.document.deleteMany({
-        where: { projectId: id }
-      });
-      
+    await prisma.document.deleteMany({
+      where: { projectId: id }
+    });
+    
       // 6. Delete tasks
-      await prisma.task.deleteMany({
-        where: { projectId: id }
-      });
-      
+    await prisma.task.deleteMany({
+      where: { projectId: id }
+    });
+    
       // 7. Delete calendar event attendees first (foreign key constraint)
       const calendarEvents = await prisma.calendarEvent.findMany({
         where: { projectId: id },
@@ -661,9 +661,9 @@ export const deleteProject = async (req: Request, res: Response) => {
       if (calendarEventIds.length > 0) {
         await prisma.calendarEventAttendee.deleteMany({
           where: { eventId: { in: calendarEventIds } }
-        });
+    });
       }
-      
+
       // 8. Delete other project-related records
       await Promise.all([
         // These can be deleted in parallel
@@ -673,10 +673,10 @@ export const deleteProject = async (req: Request, res: Response) => {
         prisma.calendarEvent.deleteMany({ where: { projectId: id } }),
         prisma.projectMember.deleteMany({ where: { projectId: id } })
       ]);
-      
+
       // 8. Finally delete the project
-      await prisma.project.delete({
-        where: { id }
+    await prisma.project.delete({
+      where: { id }
       });
     });
     
@@ -704,10 +704,10 @@ export const deleteProject = async (req: Request, res: Response) => {
     
     // Only send error response if response hasn't been sent yet
     if (!res.headersSent) {
-      if (error instanceof ApiError) {
-        res.status(error.statusCode).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Failed to delete project' });
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: 'Failed to delete project' });
       }
     }
   }

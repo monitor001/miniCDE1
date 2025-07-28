@@ -504,8 +504,8 @@ const Tasks: React.FC = () => {
     return tasks.map((task) => ({
       id: task.id,
       name: task.title,
-      start: task.dueDate ? new Date(task.dueDate) : new Date(),
-      end: task.dueDate ? new Date(task.dueDate) : new Date(),
+      start: task.startDate ? new Date(task.startDate) : (task.dueDate ? new Date(task.dueDate) : new Date()),
+      end: task.dueDate ? new Date(task.dueDate) : (task.startDate ? new Date(task.startDate) : new Date()),
       type: 'task',
       progress: task.status === 'COMPLETED' ? 100 : 0,
       isDisabled: false,
@@ -530,6 +530,21 @@ const Tasks: React.FC = () => {
             </Text>
           )}
         </div>
+      )
+    },
+    {
+      title: 'Ngày bắt đầu',
+      dataIndex: 'startDate',
+      key: 'startDate',
+      render: (date: string) => (
+        date ? (
+          <Space>
+            <CalendarOutlined />
+            <span>{moment(date).format('DD/MM/YYYY')}</span>
+          </Space>
+        ) : (
+          <Text type="secondary">-</Text>
+        )
       )
     },
     {
@@ -897,29 +912,57 @@ const Tasks: React.FC = () => {
         </Card>
 
         {/* Task Table */}
-        <Table
-          columns={parentColumns}
-          dataSource={groupedTasks}
-          rowKey={record => (record && typeof record === 'object' && 'key' in record ? (record as any).key : undefined)}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Table
-                columns={childColumns}
-                dataSource={record.tasks}
-                rowKey={task => (task && typeof task === 'object' && 'id' in task ? (task as any).id : undefined)}
-                pagination={false}
-                showHeader={true}
-                bordered={false}
-              />
-            ),
-            rowExpandable: record => record.tasks.length > 0,
-          }}
-          pagination={false}
-          showHeader={false}
-          bordered
-          style={{ marginTop: 24 }}
-          locale={{ emptyText: 'Không có công việc nào' }}
-        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <Button type={viewMode === 'table' ? 'primary' : 'default'} onClick={() => setViewMode('table')}>Bảng</Button>
+            <Button type={viewMode === 'gantt' ? 'primary' : 'default'} onClick={() => setViewMode('gantt')} style={{ marginLeft: 8 }}>Gantt Timeline</Button>
+          </div>
+          <div>
+            <Button onClick={handleExportTable} style={{ marginRight: 8 }}>Xuất PDF Bảng</Button>
+            <Button onClick={handleExportGantt}>Xuất PDF Gantt</Button>
+          </div>
+        </div>
+
+        {viewMode === 'table' ? (
+          <Table
+            columns={parentColumns}
+            dataSource={groupedTasks}
+            rowKey={record => (record && typeof record === 'object' && 'key' in record ? (record as any).key : undefined)}
+            expandable={{
+              expandedRowRender: (record) => (
+                <Table
+                  columns={childColumns}
+                  dataSource={record.tasks}
+                  rowKey={task => (task && typeof task === 'object' && 'id' in task ? (task as any).id : undefined)}
+                  pagination={false}
+                  showHeader={true}
+                  bordered={false}
+                />
+              ),
+              rowExpandable: record => record.tasks.length > 0,
+            }}
+            pagination={false}
+            showHeader={false}
+            bordered
+            style={{ marginTop: 24 }}
+            locale={{ emptyText: 'Không có công việc nào' }}
+          />
+        ) : (
+          <div className="gantt-container" style={{ background: isDarkMode ? '#232428' : '#fff', padding: 16, borderRadius: 8, marginTop: 24 }}>
+            <Gantt
+              tasks={getGanttTasks()}
+              viewMode={ViewMode.Day}
+              locale="vi"
+              TooltipContent={({ task }) => (
+                <div>
+                  <b>{task.name}</b><br />
+                  Ngày bắt đầu: {moment(task.start).format('DD/MM/YYYY')}<br />
+                  Hạn: {moment(task.end).format('DD/MM/YYYY')}
+                </div>
+              )}
+            />
+          </div>
+        )}
       </div>
 
       {/* Task Modal */}

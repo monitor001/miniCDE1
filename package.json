@@ -13,10 +13,15 @@
     "npm": "9.x"
   },
   "dependencies": {
+    "axios": "^1.11.0",
     "express": "^4.18.2",
     "path": "^0.12.7"
   },
-  "keywords": ["minicde", "frontend", "react"],
+  "keywords": [
+    "minicde",
+    "frontend",
+    "react"
+  ],
   "author": "MiniCDE Team",
   "license": "MIT"
 }
