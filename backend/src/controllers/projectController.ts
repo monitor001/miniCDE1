@@ -600,7 +600,21 @@ export const deleteProject = async (req: Request, res: Response) => {
         where: { projectId: id }
       });
       
-      // 7. Delete other project-related records
+      // 7. Delete calendar event attendees first (foreign key constraint)
+      const calendarEvents = await prisma.calendarEvent.findMany({
+        where: { projectId: id },
+        select: { id: true }
+      });
+      
+      const calendarEventIds = calendarEvents.map(event => event.id);
+      
+      if (calendarEventIds.length > 0) {
+        await prisma.calendarEventAttendee.deleteMany({
+          where: { eventId: { in: calendarEventIds } }
+        });
+      }
+      
+      // 8. Delete other project-related records
       await Promise.all([
         // These can be deleted in parallel
         prisma.container.deleteMany({ where: { projectId: id } }),
