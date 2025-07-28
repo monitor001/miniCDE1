@@ -4,9 +4,9 @@
   "description": "Backend for CDE BIM ISO 19650",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "npx ts-node src/index.ts",
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "build": "echo 'Skipping TypeScript build for Heroku'",
     "seed": "ts-node prisma/seed.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
