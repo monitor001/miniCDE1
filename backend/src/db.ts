@@ -1,22 +1,33 @@
 import { PrismaClient } from '@prisma/client';
 
-// Initialize Prisma with connection pooling
-export const prisma = new PrismaClient({
+// Configure Prisma client with connection pooling for Heroku
+const prisma = new PrismaClient({
   datasources: {
     db: {
       url: process.env.DATABASE_URL,
     },
   },
-  // Connection pooling configuration
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
 });
 
-// Test database connection
-prisma.$connect()
-  .then(() => {
-    console.log('✅ Database connected successfully');
-  })
-  .catch((error) => {
-    console.error('❌ Database connection failed:', error);
-    process.exit(1);
-  }); 
+// Connection pooling configuration for Heroku
+if (process.env.NODE_ENV === 'production') {
+  // Heroku Postgres connection pooling
+  const connectionString = process.env.DATABASE_URL;
+  if (connectionString) {
+    // Add connection pooling parameters
+    const url = new URL(connectionString);
+    url.searchParams.set('connection_limit', process.env.DATABASE_POOL_MAX || '10');
+    url.searchParams.set('pool_timeout', process.env.DATABASE_POOL_IDLE_TIMEOUT || '30000');
+    
+    // Update the Prisma client with the new URL
+    prisma.$connect();
+  }
+}
+
+// Graceful shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
+
+export { prisma }; 

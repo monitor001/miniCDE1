@@ -233,7 +233,7 @@ const Users: React.FC = () => {
         console.log('User update response:', response.data);
         message.success('Đã cập nhật người dùng');
       } else {
-        const response = await axiosInstance.post('/auth/register', requestData);
+        const response = await axiosInstance.post('/users', requestData);
         console.log('User create response:', response.data);
         message.success('Đã thêm người dùng');
       }

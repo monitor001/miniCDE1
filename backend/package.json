@@ -9,12 +9,16 @@
     "build": "tsc",
     "seed": "ts-node prisma/seed.ts",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "lint": "eslint . --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "test:admin": "node test-admin-login.js",
+    "test:ssl": "node test-ssl-cors.js",
+    "test:all": "npm run test:admin && npm run test:ssl",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -69,5 +73,9 @@
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }

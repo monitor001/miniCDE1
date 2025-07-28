@@ -66,20 +66,47 @@ cron.schedule('* * * * *', async () => {
 const app = express();
 const server = http.createServer(app);
 
+// CORS configuration for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://your-actual-heroku-app-name.herokuapp.com',
+        'https://your-frontend-domain.com',
+        'https://*.herokuapp.com', // Allow any Heroku subdomain
+        'https://*.vercel.app',    // Allow Vercel deployments
+        'https://*.netlify.app'    // Allow Netlify deployments
+      ]
+    : [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost',
+        'http://127.0.0.1',
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+        'http://localhost:3001',
+        'http://127.0.0.1:3001',
+        // Allow all localhost for development
+        /^http:\/\/localhost:\d+$/,
+        /^http:\/\/127\.0\.0\.1:\d+$/
+      ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
+  maxAge: 86400 // 24 hours
+};
+
 // Initialize Socket.IO
 const io = new SocketServer(server, {
-  cors: {
-    origin: [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost',
-      'http://127.0.0.1',
-      'http://localhost:8080',
-      'http://127.0.0.1:8080'
-    ],
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
 // Declare global io variable
@@ -90,48 +117,47 @@ global.io = io;
 
 // Set up rate limiting with different limits for different endpoints
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many requests from this IP, please try again later.'
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // limit each IP to 50 login attempts per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '50'), // limit each IP to 50 login attempts per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many login attempts, please try again later.'
 });
 
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 1000 API requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // limit each IP to 1000 API requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Too many API requests from this IP, please try again later.'
 });
 
 // Middleware
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost',
-    'http://127.0.0.1',
-    'http://localhost:8080',
-    'http://127.0.0.1:8080'
-  ],
-  credentials: true
+app.use(cors(corsOptions));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+    },
+  },
 }));
-app.use(helmet());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use(express.json({ limit: process.env.MAX_FILE_SIZE || '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.MAX_FILE_SIZE || '20mb' }));
 
-// Auth middleware chỉ áp dụng cho các routes cần thiết
-// app.use(authMiddleware); // Comment out global auth middleware
+// Static files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Audit log middleware (log tự động mọi thao tác thay đổi dữ liệu)
 app.use(auditLogger);
@@ -139,7 +165,6 @@ app.use(auditLogger);
 // Apply rate limiting
 app.use('/api/auth', authLimiter);
 app.use(generalLimiter);
-// app.use('/api', apiLimiter); // Comment out global API rate limiter temporarily
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -147,7 +172,8 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
@@ -167,41 +193,6 @@ app.get('/health/db', async (req, res) => {
       error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString()
     });
-  }
-});
-
-// Static files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// Temporary test endpoint (remove in production)
-app.get('/api/test/users', async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, name: true, email: true, role: true }
-    });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-
-// Test login endpoint
-app.post('/api/test/login', async (req, res) => {
-  try {
-    console.log('Test login endpoint called');
-    res.json({ message: 'Login endpoint accessible' });
-  } catch (error) {
-    res.status(500).json({ error: 'Test failed' });
-  }
-});
-
-// Test auth endpoint
-app.post('/api/test/auth', async (req, res) => {
-  try {
-    console.log('Test auth endpoint called');
-    res.json({ message: 'Auth endpoint accessible' });
-  } catch (error) {
-    res.status(500).json({ error: 'Test failed' });
   }
 });
 
@@ -270,8 +261,8 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+const PORT = parseInt(process.env.PORT || '3001');
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);

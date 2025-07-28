@@ -16,7 +16,7 @@ import { authMiddleware } from '../middlewares/auth';
 const router = express.Router();
 
 // Public routes
-router.post('/register', register);
+// router.post('/register', register); // Disabled - only admin can create accounts
 router.post('/login', login);
 router.post('/verify-2fa', verifyTwoFactor);
 router.post('/forgot-password', forgotPassword);

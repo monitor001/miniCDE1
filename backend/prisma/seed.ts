@@ -6,20 +6,8 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Tạo user mẫu
-  const user = await prisma.user.upsert({
-    where: { email: 'demo@cde.com' },
-    update: {},
-    create: {
-      email: 'demo@cde.com',
-      password: '123456',
-      name: 'Demo User',
-      role: 'ADMIN',
-    },
-  });
-
-  // Thêm tài khoản admin mới theo yêu cầu
-  const admin2 = await prisma.user.upsert({
+  // Tạo tài khoản admin duy nhất
+  const admin = await prisma.user.upsert({
     where: { email: 'nguyenthanhvc@gmail.com' },
     update: {},
     create: {
@@ -52,10 +40,10 @@ async function main() {
       startDate: dayjs().add(1, 'day').hour(9).minute(0).second(0).toDate(),
       endDate: dayjs().add(1, 'day').hour(10).minute(0).second(0).toDate(),
       projectId: project.id,
-      createdById: user.id,
+      createdById: admin.id,
       isAllDay: false,
       attendees: {
-        create: [{ userId: user.id, status: 'ACCEPTED' }]
+        create: [{ userId: admin.id, status: 'ACCEPTED' }]
       }
     }
   });
@@ -68,10 +56,10 @@ async function main() {
       startDate: dayjs().add(3, 'day').hour(17).minute(0).second(0).toDate(),
       endDate: dayjs().add(3, 'day').hour(17).minute(0).second(0).toDate(),
       projectId: project.id,
-      createdById: user.id,
+      createdById: admin.id,
       isAllDay: false,
       attendees: {
-        create: [{ userId: user.id, status: 'INVITED' }]
+        create: [{ userId: admin.id, status: 'INVITED' }]
       }
     }
   });
@@ -84,10 +72,10 @@ async function main() {
       startDate: dayjs().add(7, 'day').hour(0).minute(0).second(0).toDate(),
       endDate: dayjs().add(7, 'day').hour(23).minute(59).second(0).toDate(),
       projectId: project.id,
-      createdById: user.id,
+      createdById: admin.id,
       isAllDay: true,
       attendees: {
-        create: [{ userId: user.id, status: 'TENTATIVE' }]
+        create: [{ userId: admin.id, status: 'TENTATIVE' }]
       }
     }
   });

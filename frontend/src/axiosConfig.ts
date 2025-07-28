@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { App } from 'antd';
 
-// Base URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+// Base URL - support both development and production
+const API_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://your-actual-heroku-app-name.herokuapp.com/api'
+    : 'http://localhost:3001/api'
+  );
 
 // Create axios instance
 const axiosInstance = axios.create({
@@ -10,6 +14,7 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: parseInt(process.env.REACT_APP_REQUEST_TIMEOUT || '30000'),
 });
 
 // Request interceptor
@@ -23,6 +28,9 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // Add request timestamp for debugging
+    config.metadata = { startTime: new Date() };
+    
     return config;
   },
   (error) => {
@@ -33,6 +41,14 @@ axiosInstance.interceptors.request.use(
 // Response interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
+    // Log response time for debugging
+    const endTime = new Date();
+    const startTime = response.config.metadata?.startTime;
+    if (startTime) {
+      const duration = endTime.getTime() - startTime.getTime();
+      console.log(`API Request completed in ${duration}ms:`, response.config.url);
+    }
+    
     return response;
   },
   (error) => {
@@ -60,9 +76,19 @@ axiosInstance.interceptors.response.use(
           console.error('The requested resource was not found.');
           break;
         
+        case 429:
+          // Rate limited
+          console.error('Too many requests. Please try again later.');
+          break;
+        
         case 500:
           // Server error
           console.error('An error occurred on the server. Please try again later.');
+          break;
+        
+        case 503:
+          // Service unavailable
+          console.error('Service temporarily unavailable. Please try again later.');
           break;
         
         default:
