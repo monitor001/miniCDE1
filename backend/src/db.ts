@@ -12,16 +12,25 @@ const prisma = new PrismaClient({
 
 // Connection pooling configuration for Heroku
 if (process.env.NODE_ENV === 'production') {
+  console.log('Configuring database connection for production...');
+  
+  // Ensure we have both DATABASE_URL and DIRECT_URL
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not defined!');
+  }
+  
+  if (!process.env.DIRECT_URL) {
+    console.error('DIRECT_URL is not defined!');
+  }
+  
   // Heroku Postgres connection pooling
-  const connectionString = process.env.DATABASE_URL;
-  if (connectionString) {
-    // Add connection pooling parameters
-    const url = new URL(connectionString);
-    url.searchParams.set('connection_limit', process.env.DATABASE_POOL_MAX || '10');
-    url.searchParams.set('pool_timeout', process.env.DATABASE_POOL_IDLE_TIMEOUT || '30000');
-    
-    // Update the Prisma client with the new URL
-    prisma.$connect();
+  try {
+    // Connect to the database
+    prisma.$connect()
+      .then(() => console.log('Database connected successfully'))
+      .catch(err => console.error('Database connection error:', err));
+  } catch (error) {
+    console.error('Error during database connection setup:', error);
   }
 }
 
