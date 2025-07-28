@@ -292,28 +292,52 @@ export const createProject = async (req: Request, res: Response) => {
     }
     
     // Create project with current user as a member
-    const project = await prisma.project.create({
-      data: {
-        name: name.trim(),
-        description: description ? description.trim() : null,
-        status,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        priority: priority || null,
-        members: {
-          create: [
-            {
-              userId: req.user?.id as string,
-              role: Role.PROJECT_MANAGER
-            },
-            // Add other members if provided
-            ...validatedMemberIds.map((memberId: string) => ({
-              userId: memberId,
-              role: Role.CONTRIBUTOR
-            }))
-          ]
+    const project = await prisma.$transaction(async (prisma) => {
+      // First create the project
+      const newProject = await prisma.project.create({
+        data: {
+          name: name.trim(),
+          description: description ? description.trim() : null,
+          status,
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          priority: priority || null,
         }
-      },
+      });
+      
+      // Then add project members
+      try {
+        // Add current user as project manager
+        await prisma.projectMember.create({
+          data: {
+            userId: req.user?.id as string,
+            projectId: newProject.id,
+            role: Role.PROJECT_MANAGER
+          }
+        });
+        
+        // Add other members if provided
+        if (validatedMemberIds.length > 0) {
+          await prisma.projectMember.createMany({
+            data: validatedMemberIds.map((memberId: string) => ({
+              userId: memberId,
+              projectId: newProject.id,
+              role: Role.CONTRIBUTOR
+            })),
+            skipDuplicates: true
+          });
+        }
+        
+        return newProject;
+      } catch (error) {
+        console.error('Error adding project members:', error);
+        throw new ApiError(500, 'Failed to add project members');
+      }
+    });
+    
+    // Fetch complete project with members
+    const projectWithMembers = await prisma.project.findUnique({
+      where: { id: project.id },
       include: {
         members: {
           include: {
@@ -330,56 +354,73 @@ export const createProject = async (req: Request, res: Response) => {
       }
     });
     
+    if (!projectWithMembers) {
+      throw new ApiError(500, 'Failed to fetch project after creation');
+    }
+    
     // Create default containers according to ISO 19650
-    await prisma.container.createMany({
-      data: [
-        {
-          name: 'Work in Progress',
-          code: 'WIP',
-          status: 'WORK_IN_PROGRESS',
-          projectId: project.id
-        },
-        {
-          name: 'Shared',
-          code: 'S',
-          status: 'SHARED',
-          projectId: project.id
-        },
-        {
-          name: 'Published',
-          code: 'P',
-          status: 'PUBLISHED',
-          projectId: project.id
-        },
-        {
-          name: 'Archive',
-          code: 'A',
-          status: 'ARCHIVED',
-          projectId: project.id
-        }
-      ]
-    });
+    try {
+      await prisma.container.createMany({
+        data: [
+          {
+            name: 'Work in Progress',
+            code: 'WIP',
+            status: 'WORK_IN_PROGRESS',
+            projectId: project.id
+          },
+          {
+            name: 'Shared',
+            code: 'S',
+            status: 'SHARED',
+            projectId: project.id
+          },
+          {
+            name: 'Published',
+            code: 'P',
+            status: 'PUBLISHED',
+            projectId: project.id
+          },
+          {
+            name: 'Archive',
+            code: 'A',
+            status: 'ARCHIVED',
+            projectId: project.id
+          }
+        ]
+      });
+    } catch (error) {
+      console.error('Error creating default containers:', error);
+      // Continue execution even if container creation fails
+    }
     
     // Notify project creation via Socket.IO
-    global.io.emit('project:created', {
-      id: project.id,
-      name: project.name,
-      createdBy: req.user?.id
-    });
+    try {
+      global.io.emit('project:created', {
+        id: project.id,
+        name: project.name,
+        createdBy: req.user?.id
+      });
+    } catch (error) {
+      console.error('Error emitting socket event:', error);
+    }
     
     // Log activity
     if (req.user?.id) {
-      await logActivity({
-        userId: req.user.id,
-        action: 'create',
-        objectType: 'project',
-        objectId: project.id,
-        description: `Tạo dự án mới: "${project.name}"`,
-        notify: true
-      });
+      try {
+        await logActivity({
+          userId: req.user.id,
+          action: 'create',
+          objectType: 'project',
+          objectId: project.id,
+          description: `Tạo dự án mới: "${project.name}"`,
+          notify: true
+        });
+      } catch (error) {
+        console.error('Error logging activity:', error);
+      }
     }
     
-  res.status(201).json(project);
+    res.status(201).json(projectWithMembers);
   } catch (error) {
     if (error instanceof ApiError) {
       res.status(error.statusCode).json({ error: error.message });
