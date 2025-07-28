@@ -924,29 +924,29 @@ const Tasks: React.FC = () => {
         </div>
 
         {viewMode === 'table' ? (
-          <Table
-            columns={parentColumns}
-            dataSource={groupedTasks}
-            rowKey={record => (record && typeof record === 'object' && 'key' in record ? (record as any).key : undefined)}
-            expandable={{
-              expandedRowRender: (record) => (
-                <Table
-                  columns={childColumns}
-                  dataSource={record.tasks}
-                  rowKey={task => (task && typeof task === 'object' && 'id' in task ? (task as any).id : undefined)}
-                  pagination={false}
-                  showHeader={true}
-                  bordered={false}
-                />
-              ),
-              rowExpandable: record => record.tasks.length > 0,
-            }}
-            pagination={false}
-            showHeader={false}
-            bordered
-            style={{ marginTop: 24 }}
-            locale={{ emptyText: 'Không có công việc nào' }}
-          />
+        <Table
+          columns={parentColumns}
+          dataSource={groupedTasks}
+          rowKey={record => (record && typeof record === 'object' && 'key' in record ? (record as any).key : undefined)}
+          expandable={{
+            expandedRowRender: (record) => (
+              <Table
+                columns={childColumns}
+                dataSource={record.tasks}
+                rowKey={task => (task && typeof task === 'object' && 'id' in task ? (task as any).id : undefined)}
+                pagination={false}
+                showHeader={true}
+                bordered={false}
+              />
+            ),
+            rowExpandable: record => record.tasks.length > 0,
+          }}
+          pagination={false}
+          showHeader={false}
+          bordered
+          style={{ marginTop: 24 }}
+          locale={{ emptyText: 'Không có công việc nào' }}
+        />
         ) : (
           <div className="gantt-container" style={{ background: isDarkMode ? '#232428' : '#fff', padding: 16, borderRadius: 8, marginTop: 24 }}>
             <Gantt
