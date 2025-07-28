@@ -1,0 +1,17 @@
+declare module 'jsonwebtoken';
+declare module 'uuid';
+declare module 'speakeasy';
+declare module 'qrcode';
+declare module 'nodemailer';
+declare module 'bcryptjs';
+declare module 'multer';
+declare module 'node-cron';
+declare module 'socket.io';
+declare module 'redis';
+declare module 'pg';
+declare module 'dayjs';
+declare module 'compression';
+declare module 'cors';
+declare module 'helmet';
+declare module 'express-rate-limit';
+declare module 'express-slow-down'; 
