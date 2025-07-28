@@ -249,44 +249,53 @@ export const getProjectById = async (req: Request, res: Response) => {
  */
 export const createProject = async (req: Request, res: Response) => {
   try {
-    console.log('=== CREATE PROJECT REQUEST ===');
-    console.log('Full request body:', JSON.stringify(req.body, null, 2));
-    
+    // Extract and validate project data
     const { name, description, status, startDate, endDate, priority, memberIds } = req.body;
-    
-    console.log('Extracted values:');
-    console.log('- name:', name, 'type:', typeof name);
-    console.log('- description:', description, 'type:', typeof description);
-    console.log('- status:', status, 'type:', typeof status);
-    console.log('- startDate:', startDate, 'type:', typeof startDate);
-    console.log('- endDate:', endDate, 'type:', typeof endDate);
-    console.log('- priority:', priority, 'type:', typeof priority);
-    console.log('- memberIds:', memberIds, 'type:', typeof memberIds);
     
     // Validate input
     if (!name || !status) {
       throw new ApiError(400, 'Name and status are required');
     }
+    
     if (typeof name !== 'string' || name.trim().length < 3) {
       throw new ApiError(400, 'Tên dự án phải có ít nhất 3 ký tự');
     }
     
-    // Log thông tin tạo dự án
-    console.log('Creating project with data:', {
-      name,
-      description: description || null,
-      status,
-      startDate: startDate || null,
-      endDate: endDate || null,
-      priority: priority || null,
-      memberIds: memberIds || []
-    });
+    // Validate status
+    const validStatuses = ['PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      throw new ApiError(400, 'Invalid project status');
+    }
+    
+    // Validate dates if provided
+    if (startDate && isNaN(Date.parse(startDate))) {
+      throw new ApiError(400, 'Invalid start date format');
+    }
+    
+    if (endDate && isNaN(Date.parse(endDate))) {
+      throw new ApiError(400, 'Invalid end date format');
+    }
+    
+    // Validate priority if provided
+    if (priority) {
+      const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+      if (!validPriorities.includes(priority)) {
+        throw new ApiError(400, 'Invalid priority value');
+      }
+    }
+    
+    // Validate memberIds if provided
+    let validatedMemberIds: string[] = [];
+    if (memberIds && Array.isArray(memberIds)) {
+      // Filter out invalid memberIds
+      validatedMemberIds = memberIds.filter(id => typeof id === 'string' && id.length > 0);
+    }
     
     // Create project with current user as a member
     const project = await prisma.project.create({
       data: {
-        name,
-        description: description || null,
+        name: name.trim(),
+        description: description ? description.trim() : null,
         status,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -298,10 +307,10 @@ export const createProject = async (req: Request, res: Response) => {
               role: Role.PROJECT_MANAGER
             },
             // Add other members if provided
-            ...(memberIds && Array.isArray(memberIds) ? memberIds.map((memberId: string) => ({
+            ...validatedMemberIds.map((memberId: string) => ({
               userId: memberId,
               role: Role.CONTRIBUTOR
-            })) : [])
+            }))
           ]
         }
       },
