@@ -109,11 +109,8 @@ const io = new Server(server, {
   cors: corsOptions
 });
 
-// Declare global io variable
-declare global {
-  var io: any;
-}
-global.io = io;
+// Set global io variable
+(global as any).io = io;
 
 // Set up rate limiting with different limits for different endpoints
 const generalLimiter = rateLimit({
