@@ -78,6 +78,24 @@ async function main() {
             }
         }
     });
+    // Tạo task mẫu có trường startDate
+    await prisma.task.create({
+      data: {
+        title: 'Nhiệm vụ mẫu',
+        description: 'Đây là nhiệm vụ mẫu có ngày bắt đầu',
+        status: 'TODO',
+        priority: 'HIGH',
+        startDate: new Date(),
+        dueDate: (0, dayjs_1.default)().add(5, 'day').toDate(),
+        assigneeId: admin.id,
+        projectId: project.id,
+      }
+    });
+    // Cập nhật các task cũ bị thiếu startDate
+    await prisma.task.updateMany({
+      where: { startDate: null },
+      data: { startDate: new Date() }
+    });
     console.log('Seed dữ liệu mẫu thành công!');
 }
 main().finally(() => prisma.$disconnect());
