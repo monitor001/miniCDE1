@@ -139,6 +139,9 @@ const apiLimiter = rateLimit({
   message: 'Too many API requests from this IP, please try again later.'
 });
 
+// Trust proxy for Heroku
+app.set('trust proxy', process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production');
+
 // Middleware
 app.use(cors(corsOptions));
 app.use(helmet({
