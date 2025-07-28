@@ -283,20 +283,25 @@ export const createTask = async (req: Request, res: Response) => {
 
     // Check if assignee exists and is a project member
     if (assigneeId) {
-      const assignee = await prisma.user.findUnique({
-        where: { id: assigneeId }
-      });
-
-      if (!assignee) {
-        throw new ApiError(404, 'Assignee not found');
-      }
-
-      const isAssigneeMember = project.members.some(
-        (member: any) => member.userId === assigneeId
-      );
-
-      if (!isAssigneeMember) {
-        throw new ApiError(400, 'Assignee must be a member of the project');
+      try {
+        const assignee = await prisma.user.findUnique({
+          where: { id: assigneeId }
+        });
+  
+        if (!assignee) {
+          throw new ApiError(404, 'Assignee not found');
+        }
+  
+        const isAssigneeMember = project.members.some(
+          (member: any) => member.userId === assigneeId
+        );
+  
+        if (!isAssigneeMember) {
+          throw new ApiError(400, 'Assignee must be a member of the project');
+        }
+      } catch (error) {
+        console.error('Error checking assignee:', error);
+        throw new ApiError(400, 'Invalid assignee ID or user not found');
       }
     }
 
