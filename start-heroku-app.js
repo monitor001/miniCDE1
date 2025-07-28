@@ -41,7 +41,7 @@ async function startApp() {
     // Step 4: Test health endpoint
     console.log('🧪 Testing health endpoint...');
     try {
-      const healthResult = execSync(`curl -f https://${APP_NAME}.herokuapp.com/health`, { encoding: 'utf8' });
+      const healthResult = execSync(`curl -f https://${APP_NAME}-589be4b0d52b.herokuapp.com/health`, { encoding: 'utf8' });
       console.log('Health check result:', healthResult);
     } catch (error) {
       console.log('⚠️  Health check failed:', error.message);
@@ -66,7 +66,7 @@ async function startApp() {
     // Step 7: Test admin login
     console.log('🔐 Testing admin login...');
     try {
-      const loginResult = execSync(`curl -X POST https://${APP_NAME}.herokuapp.com/api/auth/login -H "Content-Type: application/json" -d '{"email":"nguyenthanhvc@gmail.com","password":"Ab5463698664#"}'`, { encoding: 'utf8' });
+      const loginResult = execSync(`curl -X POST https://${APP_NAME}-589be4b0d52b.herokuapp.com/api/auth/login -H "Content-Type: application/json" -d '{"email":"nguyenthanhvc@gmail.com","password":"Ab5463698664#"}'`, { encoding: 'utf8' });
       console.log('Login test result:', loginResult);
     } catch (error) {
       console.log('⚠️  Login test failed:', error.message);
@@ -74,8 +74,8 @@ async function startApp() {
     
     console.log('');
     console.log('🎉 App startup process completed!');
-    console.log(`🌐 App URL: https://${APP_NAME}.herokuapp.com`);
-    console.log(`🔗 API URL: https://${APP_NAME}.herokuapp.com/api`);
+    console.log(`🌐 App URL: https://${APP_NAME}-589be4b0d52b.herokuapp.com`);
+    console.log(`🔗 API URL: https://${APP_NAME}-589be4b0d52b.herokuapp.com/api`);
     console.log('');
     console.log('🔐 Admin Login:');
     console.log(`   Email: nguyenthanhvc@gmail.com`);

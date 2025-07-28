@@ -4,7 +4,7 @@ import { App } from 'antd';
 // Base URL - support both development and production
 const API_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://your-actual-heroku-app-name.herokuapp.com/api'
+    ? 'https://minicde-production-589be4b0d52b.herokuapp.com/api'
     : 'http://localhost:3001/api'
   );
 

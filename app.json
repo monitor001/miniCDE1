@@ -16,11 +16,11 @@
     },
     "REACT_APP_API_URL": {
       "description": "Frontend API URL",
-      "value": "https://minicde-app.herokuapp.com/api"
+      "value": "https://minicde-production-589be4b0d52b.herokuapp.com/api"
     },
     "REACT_APP_SOCKET_URL": {
       "description": "Frontend Socket URL",
-      "value": "https://minicde-app.herokuapp.com"
+      "value": "https://minicde-production-589be4b0d52b.herokuapp.com"
     },
     "MAX_FILE_SIZE": {
       "description": "Maximum file upload size",
