@@ -50,7 +50,7 @@ const storage = multer.diskStorage({
 });
 
 // File filter
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (req: any, file: any, cb: any) => {
   // Get allowed file types from environment or use default
   const allowedFileTypes = (process.env.ALLOWED_FILE_TYPES || 'pdf,dwg,rvt,ifc,docx,xlsx,jpg,png')
     .split(',')

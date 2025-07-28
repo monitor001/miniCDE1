@@ -14,21 +14,4 @@ declare module 'compression';
 declare module 'cors';
 declare module 'helmet';
 declare module 'express-rate-limit';
-declare module 'express-slow-down';
-
-// Extend Express namespace for Multer
-declare namespace Express {
-  export interface Multer {
-    File: {
-      fieldname: string;
-      originalname: string;
-      encoding: string;
-      mimetype: string;
-      size: number;
-      destination: string;
-      filename: string;
-      path: string;
-      buffer: Buffer;
-    };
-  }
-} 
+declare module 'express-slow-down'; 

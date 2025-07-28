@@ -1333,7 +1333,7 @@ export const uploadProjectImages = async (req: Request, res: Response) => {
     }
     
     // Check if files were uploaded
-    const files = req.files as Express.Multer.File[] | undefined;
+    const files = req.files as any[] | undefined;
     if (!files || files.length === 0) {
       throw new ApiError(400, 'No files were uploaded');
     }
