@@ -5,7 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import http from 'http';
-import { Server as SocketServer } from 'socket.io';
+import { Server } from 'socket.io';
 import { sendMail } from './utils/email';
 import cron from 'node-cron';
 
@@ -105,13 +105,13 @@ const corsOptions = {
 };
 
 // Initialize Socket.IO
-const io = new SocketServer(server, {
+const io = new Server(server, {
   cors: corsOptions
 });
 
 // Declare global io variable
 declare global {
-  var io: SocketServer;
+  var io: any;
 }
 global.io = io;
 
@@ -165,6 +165,26 @@ app.use(auditLogger);
 // Apply rate limiting
 app.use('/api/auth', authLimiter);
 app.use(generalLimiter);
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'MiniCDE API Server',
+    version: process.env.npm_package_version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      projects: '/api/projects',
+      tasks: '/api/tasks',
+      documents: '/api/documents',
+      users: '/api/users',
+      dashboard: '/api/dashboard'
+    },
+    documentation: 'This is a backend API server. Please use the frontend application to access the full interface.'
+  });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
