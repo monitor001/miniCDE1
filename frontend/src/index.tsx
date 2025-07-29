@@ -19,3 +19,7 @@ root.render(
 );
 
 reportWebVitals();
+
+if (process.env.REACT_APP_TITLE) {
+  document.title = process.env.REACT_APP_TITLE;
+}
