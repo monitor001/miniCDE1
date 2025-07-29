@@ -28,7 +28,7 @@ dayjs.extend(relativeTime);
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 
-const socket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001');
+const socket = io(process.env.REACT_APP_SOCKET_URL || 'https://qlda.hoanglong24.com');
 
 function stringToColor(str: string) {
   let hash = 0;

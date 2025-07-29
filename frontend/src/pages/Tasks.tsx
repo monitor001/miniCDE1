@@ -261,7 +261,7 @@ const Tasks: React.FC = () => {
     fetchProjects();
     
     // Cấu hình Socket.IO với URL chính xác
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'https://qlda.hoanglong24.com';
     console.log('Connecting to Socket.IO at:', socketUrl);
     
     try {

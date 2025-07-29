@@ -246,7 +246,7 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const socket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001');
+    const socket = io(process.env.REACT_APP_SOCKET_URL || 'https://qlda.hoanglong24.com');
     socket.on('activity:new', (activity: any) => {
       setRecentActivities(prev => [activity, ...prev.slice(0, 9)]);
     });

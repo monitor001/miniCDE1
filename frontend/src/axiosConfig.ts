@@ -4,8 +4,8 @@ import { App } from 'antd';
 // Base URL - support both development and production
 const API_URL = process.env.REACT_APP_API_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://minicde-production-589be4b0d52b.herokuapp.com/api'
-    : 'http://localhost:3001/api'
+    ? 'https://qlda.hoanglong24.com/api'
+    : 'https://qlda.hoanglong24.com/api'
   );
 
 // Create axios instance

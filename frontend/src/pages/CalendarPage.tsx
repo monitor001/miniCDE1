@@ -113,7 +113,7 @@ const CalendarPage: React.FC = () => {
 
   React.useEffect(() => {
     // Kết nối socket
-    const socket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001');
+    const socket = io(process.env.REACT_APP_SOCKET_URL || 'https://qlda.hoanglong24.com');
     const reload = () => {
       fetchEvents();
       antdMessage.info('Lịch sự kiện đã được cập nhật realtime!');

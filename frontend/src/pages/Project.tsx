@@ -214,7 +214,7 @@ const Project: React.FC = () => {
     fetchUsers();
     
     // Socket.IO setup for project comments
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3001';
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'https://qlda.hoanglong24.com';
     console.log('Connecting to Socket.IO at:', socketUrl);
     
     try {
