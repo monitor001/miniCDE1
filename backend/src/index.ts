@@ -206,8 +206,10 @@ const apiLimiter = rateLimit({
 // Trust proxy for Heroku
 app.set('trust proxy', process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production');
 
-// Middleware
+// CORS middleware phải đặt trước helmet và mọi middleware khác
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
