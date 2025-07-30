@@ -5,8 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "echo 'Build completed'",
-    "postinstall": "echo 'Postinstall completed'"
+    "build": "cd frontend && npm run build",
+    "postinstall": "cd frontend && npm install"
   },
   "engines": {
     "node": "18.x",
