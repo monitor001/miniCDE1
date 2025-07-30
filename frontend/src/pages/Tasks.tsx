@@ -330,6 +330,7 @@ const Tasks: React.FC = () => {
     setEditingTask(record);
     form.setFieldsValue({
       ...record,
+      startDate: record.startDate ? moment(record.startDate) : null,
       dueDate: record.dueDate ? moment(record.dueDate) : null,
       projectId: record.projectId
     });
@@ -377,6 +378,7 @@ const Tasks: React.FC = () => {
         description: values.description,
         status: values.status,
         priority: values.priority || 'MEDIUM',
+        startDate: values.startDate ? values.startDate.format() : undefined,
         dueDate: values.dueDate ? values.dueDate.format() : undefined,
         assigneeId: values.assigneeId || undefined,
         projectId: values.projectId
