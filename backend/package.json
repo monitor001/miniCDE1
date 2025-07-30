@@ -8,7 +8,7 @@
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "heroku-postbuild": "npm run build",
-    "seed": "npx ts-node prisma/seed.ts",
+    "seed": "node dist/prisma/seed.js",
     "db:generate": "prisma generate",
     "db:migrate": "npx prisma migrate deploy",
     "db:seed": "npx ts-node prisma/seed.ts",
@@ -22,7 +22,7 @@
     "postinstall": "prisma generate"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "node dist/prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^6.12.0",
