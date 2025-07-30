@@ -273,7 +273,7 @@ const TasksNew: React.FC = () => {
             <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{record.description}</div>
             <div style={{ marginTop: 4 }}>
               {record.tags.map(tag => (
-                <Tag key={tag} size="small" style={{ marginRight: 4, marginBottom: 2 }}>
+                <Tag key={tag} style={{ marginRight: 4, marginBottom: 2 }}>
                   {tag}
                 </Tag>
               ))}
@@ -561,7 +561,7 @@ const TasksNew: React.FC = () => {
               </div>
               <div style={{ marginTop: 8 }}>
                 {task.tags.map(tag => (
-                  <Tag key={tag} size="small" style={{ marginRight: 4 }}>
+                  <Tag key={tag} style={{ marginRight: 4 }}>
                     {tag}
                   </Tag>
                 ))}
