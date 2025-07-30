@@ -1,0 +1,3 @@
+[33m494a39e5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;31mheroku-frontend/main[m[33m)[m Fix startDate handling in Tasks.tsx form submission and editing
+[33m6fcfc788[m Add startDate field to Tasks.tsx form
+[33m73a9d02f[m[33m ([m[1;31mheroku/main[m[33m, [m[1;31mheroku/HEAD[m[33m)[m Add startDate field to task creation form and display
