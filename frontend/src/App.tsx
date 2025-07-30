@@ -19,6 +19,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import DocumentsISO from './pages/DocumentsISO';
 import DocumentDetail from './pages/DocumentDetail';
 import Tasks from './pages/Tasks';
+import TasksNew from './pages/TasksNew';
 import TaskDetail from './pages/TaskDetail';
 import Users from './pages/Users';
 import UserDetail from './pages/UserDetail';
@@ -163,7 +164,7 @@ const App: React.FC = () => {
                   <Route path="/documents-iso" element={<PrivateRoute><DocumentsISO /></PrivateRoute>} />
                   <Route path="/documents/:id" element={<PrivateRoute><DocumentDetail /></PrivateRoute>} />
                   
-                  <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
+                  <Route path="/tasks" element={<PrivateRoute><TasksNew /></PrivateRoute>} />
                   <Route path="/tasks/:id" element={<PrivateRoute><TaskDetail /></PrivateRoute>} />
                   
                   <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />

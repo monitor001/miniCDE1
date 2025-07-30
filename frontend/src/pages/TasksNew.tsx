@@ -112,6 +112,7 @@ const TasksNew: React.FC = () => {
       priority: 'MEDIUM',
       assignee: 'Nguyễn Văn A',
       project: 'Dự án Hạ Tầng ABC',
+      startDate: '2024-03-01',
       dueDate: '2024-04-10',
       progress: 0,
       estimatedHours: 16,
@@ -126,6 +127,7 @@ const TasksNew: React.FC = () => {
       priority: 'HIGH',
       assignee: 'Phạm Thị D',
       project: 'Dự án Tòa Nhà Văn Phòng',
+      startDate: '2024-02-15',
       dueDate: '2024-03-30',
       progress: 60,
       estimatedHours: 80,
@@ -140,6 +142,7 @@ const TasksNew: React.FC = () => {
       priority: 'MEDIUM',
       assignee: 'Hoàng Văn E',
       project: 'Dự án Công Viên',
+      startDate: '2024-03-15',
       dueDate: '2024-04-20',
       progress: 30,
       estimatedHours: 32,
@@ -210,7 +213,11 @@ const TasksNew: React.FC = () => {
 
   const handleEdit = (record: Task) => {
     setEditingTask(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      startDate: record.startDate ? moment(record.startDate) : null,
+      dueDate: record.dueDate ? moment(record.dueDate) : null,
+    });
     setModalOpen(true);
   };
 
@@ -228,11 +235,18 @@ const TasksNew: React.FC = () => {
     try {
       const values = await form.validateFields();
       
+      // Xử lý startDate và dueDate
+      const submitData = {
+        ...values,
+        startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : undefined,
+        dueDate: values.dueDate ? values.dueDate.format('YYYY-MM-DD') : undefined,
+      };
+      
       if (editingTask) {
-        await axiosInstance.put(`/api/tasks/${editingTask.id}`, values);
+        await axiosInstance.put(`/api/tasks/${editingTask.id}`, submitData);
         message.success('Đã cập nhật nhiệm vụ!');
       } else {
-        await axiosInstance.post('/api/tasks', values);
+        await axiosInstance.post('/api/tasks', submitData);
         message.success('Đã thêm nhiệm vụ!');
       }
       
