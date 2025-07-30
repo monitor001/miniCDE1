@@ -160,7 +160,16 @@ const corsOptions = {
 // Initialize Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    origin: getCorsOrigins(),
+    origin: [
+      'http://qlda.hoanglong24.com',
+      'https://qlda.hoanglong24.com',
+      'https://minicde-production-589be4b0d52b.herokuapp.com',
+      'https://minicde-frontend-833302d6ab3c.herokuapp.com',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:8080',
+      'http://127.0.0.1:8080',
+    ],
     credentials: true,
     methods: ['GET', 'POST']
   }
