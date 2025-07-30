@@ -54,6 +54,7 @@ import {
 } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
 import io from 'socket.io-client';
+// @ts-ignore
 import { debounce } from 'lodash';
 
 const { Option } = Select;
