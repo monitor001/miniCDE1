@@ -61,7 +61,7 @@ export const login = createAsyncThunk<LoginResponse, LoginCredentials>(
   async (credentials, { rejectWithValue }) => {
     try {
       console.log('Attempting login with:', credentials);
-      const response = await axiosInstance.post('/api/auth/login', credentials);
+      const response = await axiosInstance.post('/auth/login', credentials);
       console.log('Login response:', response.data);
       
       // Check if 2FA is required
@@ -90,7 +90,7 @@ export const verifyTwoFactor = createAsyncThunk<LoginResponse, TwoFactorVerifyDa
   'auth/verifyTwoFactor',
   async (data, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.post('/api/auth/verify-2fa', data);
+      const response = await axiosInstance.post('/auth/verify-2fa', data);
       
       // Store token and user in localStorage
       localStorage.setItem('token', response.data.token);
@@ -107,7 +107,7 @@ export const register = createAsyncThunk<LoginResponse, RegisterData>(
   'auth/register',
   async (data, { rejectWithValue }) => {
     try {
-      const response = await axiosInstance.post('/api/auth/register', data);
+      const response = await axiosInstance.post('/auth/register', data);
       
       // Store token and user in localStorage
       localStorage.setItem('token', response.data.token);
@@ -145,7 +145,7 @@ export const refreshToken = createAsyncThunk(
       
       if (decodedToken.exp && decodedToken.exp < currentTime) {
         // Token is expired, try to refresh
-        const response = await axiosInstance.post('/api/auth/refresh-token');
+        const response = await axiosInstance.post('/auth/refresh-token');
         
         // Store new token and user in localStorage
         localStorage.setItem('token', response.data.token);
