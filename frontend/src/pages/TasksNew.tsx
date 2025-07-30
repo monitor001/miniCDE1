@@ -196,13 +196,13 @@ const TasksNew: React.FC = () => {
   };
 
   const getPriorityDisplay = (priority: string) => {
-    const priorityMap: { [key: string]: { label: string; color: string } } = {
-      'HIGH': { label: 'Cao', color: 'red' },
-      'MEDIUM': { label: 'Trung bình', color: 'orange' },
-      'LOW': { label: 'Thấp', color: 'green' },
-      'NONE': { label: 'Không', color: 'default' }
+    const priorityMap: { [key: string]: { label: string; color: string; icon: React.ReactNode } } = {
+      'HIGH': { label: 'Cao', color: 'red', icon: <ExclamationCircleOutlined /> },
+      'MEDIUM': { label: 'Trung bình', color: 'orange', icon: <ClockCircleOutlined /> },
+      'LOW': { label: 'Thấp', color: 'green', icon: <CheckCircleOutlined /> },
+      'NONE': { label: 'Không', color: 'default', icon: <CloseCircleOutlined /> }
     };
-    return priorityMap[priority] || { label: priority, color: 'default' };
+    return priorityMap[priority] || { label: priority, color: 'default', icon: <CloseCircleOutlined /> };
   };
 
   const handleAdd = () => {
