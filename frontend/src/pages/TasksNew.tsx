@@ -154,7 +154,7 @@ const TasksNew: React.FC = () => {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const response = await axiosInstance.get('/api/tasks');
+      const response = await axiosInstance.get('/tasks');
       setTasks(response.data || mockTasks);
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -246,7 +246,7 @@ const TasksNew: React.FC = () => {
         await axiosInstance.put(`/api/tasks/${editingTask.id}`, submitData);
         message.success('Đã cập nhật nhiệm vụ!');
       } else {
-        await axiosInstance.post('/api/tasks', submitData);
+        await axiosInstance.post('/tasks', submitData);
         message.success('Đã thêm nhiệm vụ!');
       }
       

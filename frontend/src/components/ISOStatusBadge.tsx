@@ -29,7 +29,7 @@ const ISOStatusBadge: React.FC<ISOStatusBadgeProps> = ({
   const fetchStatusConfig = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/iso/statuses');
+      const response = await axios.get('/iso/statuses');
       const statuses = response.data;
       const foundStatus = statuses.find((s: DocumentStatus) => 
         s.id === status || s.name === status || s.nameVi === status

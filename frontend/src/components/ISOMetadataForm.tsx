@@ -34,7 +34,7 @@ const ISOMetadataForm: React.FC<ISOMetadataFormProps> = ({
   const fetchMetadataFields = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/iso/metadata-fields');
+      const response = await axios.get('/iso/metadata-fields');
       setMetadataFields(response.data);
     } catch (error) {
       console.error('Error fetching metadata fields:', error);

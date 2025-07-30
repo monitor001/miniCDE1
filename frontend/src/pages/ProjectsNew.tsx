@@ -403,7 +403,7 @@ const ProjectsNew: React.FC = () => {
 
   const fetchAvailableUsers = async () => {
     try {
-      const response = await axiosInstance.get('/api/users');
+      const response = await axiosInstance.get('/users');
       console.log('Available users API response:', response.data);
       
       // Kiểm tra dữ liệu trả về
