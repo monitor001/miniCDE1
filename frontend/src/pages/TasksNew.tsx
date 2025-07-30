@@ -268,15 +268,16 @@ const TasksNew: React.FC = () => {
             <CheckCircleOutlined />
           </Avatar>
           <div>
-            <div style={{ fontWeight: 500 }}>{text}</div>
-            <div style={{ fontSize: 12, color: '#666' }}>{record.description}</div>
-                         <div style={{ marginTop: 4 }}>
-               {record.tags.map(tag => (
-                 <Tag key={tag} style={{ marginRight: 4 }}>
-                   {tag}
-                 </Tag>
-               ))}
-             </div>
+            <div style={{ fontWeight: 500, fontSize: 14 }}>{record.project}</div>
+            <div style={{ fontWeight: 500, marginTop: 4 }}>{text}</div>
+            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{record.description}</div>
+            <div style={{ marginTop: 4 }}>
+              {record.tags.map(tag => (
+                <Tag key={tag} size="small" style={{ marginRight: 4, marginBottom: 2 }}>
+                  {tag}
+                </Tag>
+              ))}
+            </div>
           </div>
         </div>
       ),
@@ -295,30 +296,33 @@ const TasksNew: React.FC = () => {
       },
     },
     {
-      title: 'TIẾN ĐỘ',
-      dataIndex: 'progress',
-      key: 'progress',
-      render: (progress: number) => (
-        <div>
-          <Progress percent={progress} size="small" />
-          <Text style={{ fontSize: 12 }}>{progress}%</Text>
-        </div>
-      ),
+      title: 'MỨC ĐỘ ƯU TIÊN',
+      dataIndex: 'priority',
+      key: 'priority',
+      render: (priority: string) => {
+        const priorityInfo = getPriorityDisplay(priority);
+        return (
+          <Tag color={priorityInfo.color} icon={priorityInfo.icon}>
+            {priorityInfo.label}
+          </Tag>
+        );
+      },
+      sorter: (a: Task, b: Task) => {
+        const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+        return priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder];
+      },
     },
     {
       title: 'NGƯỜI THỰC HIỆN',
       dataIndex: 'assignee',
       key: 'assignee',
-      render: (assignee: string, record: Task) => (
+      render: (assignee: string) => (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Avatar size={24} style={{ backgroundColor: '#52c41a' }}>
               <UserOutlined />
             </Avatar>
             <Text>{assignee}</Text>
-          </div>
-          <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-            {record.project}
           </div>
         </div>
       ),
@@ -350,26 +354,23 @@ const TasksNew: React.FC = () => {
       ),
     },
     {
-      title: 'THỜI GIAN',
-      key: 'time',
-      render: (record: Task) => (
+      title: 'DỰ ÁN',
+      dataIndex: 'project',
+      key: 'project',
+      render: (project: string) => (
         <div>
-          <div style={{ marginBottom: 4 }}>
-            <Text style={{ fontSize: 12 }}>Ước tính: {record.estimatedHours}h</Text>
-          </div>
-          <div>
-            <Text style={{ fontSize: 12 }}>Thực tế: {record.actualHours}h</Text>
-          </div>
+          <Text style={{ fontWeight: 500 }}>{project}</Text>
         </div>
       ),
+      sorter: (a: Task, b: Task) => a.project.localeCompare(b.project),
     },
     {
       title: 'THAO TÁC',
       key: 'actions',
       render: (record: Task) => (
         <Space size="small">
-          <Tooltip title="Xem chi tiết">
-            <Button type="text" size="small" icon={<EyeOutlined />} />
+          <Tooltip title="Bình luận">
+            <Button type="text" size="small" icon={<FileTextOutlined />} />
           </Tooltip>
           <Tooltip title="Chỉnh sửa">
             <Button 
@@ -378,9 +379,6 @@ const TasksNew: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             />
-          </Tooltip>
-          <Tooltip title="Báo cáo tiến độ">
-            <Button type="text" size="small" icon={<DownloadOutlined />} />
           </Tooltip>
           <Tooltip title="Xóa">
             <Button 
@@ -522,6 +520,57 @@ const TasksNew: React.FC = () => {
         </Row>
       </Card>
 
+      {/* Gantt Timeline */}
+      <Card title="Timeline Nhiệm Vụ" style={{ marginBottom: 24 }}>
+        <div style={{ height: 300, overflow: 'auto' }}>
+          {getFilteredTasks().map((task) => (
+            <div key={task.id} style={{ marginBottom: 16, padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div>
+                  <Text strong>{task.title}</Text>
+                  <div style={{ fontSize: 12, color: '#666' }}>{task.project}</div>
+                </div>
+                <div>
+                  {getStatusDisplay(task.status).icon}
+                  <Text style={{ marginLeft: 4 }}>{getStatusDisplay(task.status).label}</Text>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    height: 8, 
+                    backgroundColor: '#f0f0f0', 
+                    borderRadius: 4,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      height: '100%',
+                      width: `${task.progress}%`,
+                      backgroundColor: getStatusDisplay(task.status).color,
+                      borderRadius: 4
+                    }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#666' }}>
+                  {moment(task.startDate).format('DD/MM')} - {moment(task.dueDate).format('DD/MM')}
+                </div>
+              </div>
+              <div style={{ marginTop: 8 }}>
+                {task.tags.map(tag => (
+                  <Tag key={tag} size="small" style={{ marginRight: 4 }}>
+                    {tag}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* Tasks Table */}
       <Card title={`Danh sách nhiệm vụ (${getFilteredTasks().length})`}>
         <Table
@@ -654,18 +703,6 @@ const TasksNew: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item
-                name="estimatedHours"
-                label="Thời gian ước tính (giờ)"
-                rules={[{ required: true, message: 'Vui lòng nhập thời gian ước tính!' }]}
-              >
-                <Input type="number" />
-              </Form.Item>
-            </Col>
-          </Row>
-          
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
                 name="tags"
                 label="Tags"
               >
@@ -679,6 +716,8 @@ const TasksNew: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+          
+
         </Form>
       </Modal>
     </div>
