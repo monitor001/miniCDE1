@@ -53,6 +53,7 @@ interface Task {
   priority: string;
   assignee: string;
   project: string;
+  startDate: string;
   dueDate: string;
   progress: number;
   estimatedHours: number;
@@ -81,6 +82,7 @@ const TasksNew: React.FC = () => {
       priority: 'HIGH',
       assignee: 'Trần Thị B',
       project: 'Dự án Cầu Vượt',
+      startDate: '2024-02-10',
       dueDate: '2024-03-15',
       progress: 75,
       estimatedHours: 40,
@@ -95,6 +97,7 @@ const TasksNew: React.FC = () => {
       priority: 'HIGH',
       assignee: 'Lê Văn C',
       project: 'Dự án Cầu Vượt',
+      startDate: '2024-01-15',
       dueDate: '2024-02-28',
       progress: 100,
       estimatedHours: 24,
@@ -307,7 +310,20 @@ const TasksNew: React.FC = () => {
       ),
     },
     {
-      title: 'THỜI HẠN',
+      title: 'NGÀY BẮT ĐẦU',
+      dataIndex: 'startDate',
+      key: 'startDate',
+      render: (startDate: string) => (
+        <div>
+          <Text>{moment(startDate).format('DD/MM/YYYY')}</Text>
+          <div style={{ fontSize: 12, color: '#666' }}>
+            {moment(startDate).fromNow()}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'HẠN HOÀN THÀNH',
       dataIndex: 'dueDate',
       key: 'dueDate',
       render: (dueDate: string) => (
@@ -590,15 +606,11 @@ const TasksNew: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                name="priority"
-                label="Mức độ ưu tiên"
-                rules={[{ required: true, message: 'Vui lòng chọn mức độ ưu tiên!' }]}
+                name="startDate"
+                label="Ngày bắt đầu"
+                rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu!' }]}
               >
-                <Select placeholder="Chọn mức độ ưu tiên">
-                  <Option value="HIGH">Cao</Option>
-                  <Option value="MEDIUM">Trung bình</Option>
-                  <Option value="LOW">Thấp</Option>
-                </Select>
+                <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -615,6 +627,19 @@ const TasksNew: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
+                name="priority"
+                label="Mức độ ưu tiên"
+                rules={[{ required: true, message: 'Vui lòng chọn mức độ ưu tiên!' }]}
+              >
+                <Select placeholder="Chọn mức độ ưu tiên">
+                  <Option value="HIGH">Cao</Option>
+                  <Option value="MEDIUM">Trung bình</Option>
+                  <Option value="LOW">Thấp</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
                 name="estimatedHours"
                 label="Thời gian ước tính (giờ)"
                 rules={[{ required: true, message: 'Vui lòng nhập thời gian ước tính!' }]}
@@ -622,6 +647,9 @@ const TasksNew: React.FC = () => {
                 <Input type="number" />
               </Form.Item>
             </Col>
+          </Row>
+          
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="tags"
