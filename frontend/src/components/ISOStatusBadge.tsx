@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Tag, Tooltip } from 'antd';
-import axios from 'axios';
+import axiosInstance from '../axiosConfig';
 
 interface DocumentStatus {
   id: string;
@@ -29,7 +29,7 @@ const ISOStatusBadge: React.FC<ISOStatusBadgeProps> = ({
   const fetchStatusConfig = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/iso/statuses');
+      const response = await axiosInstance.get('/iso/statuses');
       const statuses = response.data;
       const foundStatus = statuses.find((s: DocumentStatus) => 
         s.id === status || s.name === status || s.nameVi === status

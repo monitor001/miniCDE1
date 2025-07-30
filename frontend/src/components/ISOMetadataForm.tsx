@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Form, Input, Select, Checkbox, Row, Col, Typography, Divider } from 'antd';
-import axios from 'axios';
+import axiosInstance from '../axiosConfig';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -34,7 +34,7 @@ const ISOMetadataForm: React.FC<ISOMetadataFormProps> = ({
   const fetchMetadataFields = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/iso/metadata-fields');
+      const response = await axiosInstance.get('/iso/metadata-fields');
       setMetadataFields(response.data);
     } catch (error) {
       console.error('Error fetching metadata fields:', error);
