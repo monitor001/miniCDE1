@@ -65,6 +65,20 @@ const getEnvironment = (): string => {
   return 'development';
 };
 
+// Helper function to ensure API_URL doesn't have double /api
+const normalizeApiUrl = (url: string, isEnvVar: boolean = false): string => {
+  // If it's an environment variable and already ends with /api, return as is
+  if (isEnvVar && url.endsWith('/api')) {
+    return url;
+  }
+  // If URL already ends with /api, return as is
+  if (url.endsWith('/api')) {
+    return url;
+  }
+  // If URL doesn't end with /api, add it
+  return url.endsWith('/') ? url + 'api' : url + '/api';
+};
+
 // Get configuration based on environment
 export const getConfig = (): EnvironmentConfig => {
   const env = getEnvironment();
@@ -73,21 +87,21 @@ export const getConfig = (): EnvironmentConfig => {
     case 'production':
       return {
         ...productionConfig,
-        API_URL: process.env.REACT_APP_API_URL || productionConfig.API_URL,
+        API_URL: process.env.REACT_APP_API_URL || normalizeApiUrl(productionConfig.API_URL),
         SOCKET_URL: process.env.REACT_APP_SOCKET_URL || productionConfig.SOCKET_URL,
         APP_TITLE: process.env.REACT_APP_TITLE || productionConfig.APP_TITLE,
       };
     case 'local-production':
       return {
         ...localProductionConfig,
-        API_URL: process.env.REACT_APP_API_URL || localProductionConfig.API_URL,
+        API_URL: process.env.REACT_APP_API_URL || normalizeApiUrl(localProductionConfig.API_URL),
         SOCKET_URL: process.env.REACT_APP_SOCKET_URL || localProductionConfig.SOCKET_URL,
         APP_TITLE: process.env.REACT_APP_TITLE || localProductionConfig.APP_TITLE,
       };
     default:
       return {
         ...developmentConfig,
-        API_URL: process.env.REACT_APP_API_URL || developmentConfig.API_URL,
+        API_URL: process.env.REACT_APP_API_URL || normalizeApiUrl(developmentConfig.API_URL),
         SOCKET_URL: process.env.REACT_APP_SOCKET_URL || developmentConfig.SOCKET_URL,
         APP_TITLE: process.env.REACT_APP_TITLE || developmentConfig.APP_TITLE,
       };
