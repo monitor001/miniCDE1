@@ -1,0 +1,112 @@
+{
+  "name": "minicde-production",
+  "description": "MiniCDE - CDE BIM ISO 19650 Management System",
+  "repository": "https://github.com/monitor001/miniCDE1",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["node", "express", "react", "bim", "cde", "iso19650"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Environment",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "JWT Secret Key",
+      "value": "minicde_jwt_secret_2024_secure_production_key",
+      "required": true
+    },
+    "CORS_ORIGIN": {
+      "description": "CORS Allowed Origins",
+      "value": "https://qlda.hoanglong24.com,https://minicde-production-589be4b0d52b.herokuapp.com,https://minicde-frontend-833302d6ab3c.herokuapp.com",
+      "required": true
+    },
+    "REACT_APP_API_URL": {
+      "description": "Frontend API URL",
+      "value": "https://minicde-production-589be4b0d52b.herokuapp.com/api"
+    },
+    "REACT_APP_SOCKET_URL": {
+      "description": "Frontend Socket URL",
+      "value": "https://minicde-production-589be4b0d52b.herokuapp.com"
+    },
+    "REACT_APP_TITLE": {
+      "description": "Application Title",
+      "value": "Quản lý dự án"
+    },
+    "MAX_FILE_SIZE": {
+      "description": "Maximum file upload size",
+      "value": "104857600"
+    },
+    "ALLOWED_FILE_TYPES": {
+      "description": "Allowed file types for upload",
+      "value": "pdf,dwg,rvt,ifc,docx,xlsx,jpg,png"
+    },
+    "REQUEST_TIMEOUT": {
+      "description": "Request timeout in milliseconds",
+      "value": "30000"
+    },
+    "RESPONSE_TIMEOUT": {
+      "description": "Response timeout in milliseconds",
+      "value": "30000"
+    },
+    "RATE_LIMIT_WINDOW_MS": {
+      "description": "Rate limit window in milliseconds",
+      "value": "900000"
+    },
+    "RATE_LIMIT_MAX_REQUESTS": {
+      "description": "Maximum requests per window",
+      "value": "1000"
+    },
+    "AUTH_RATE_LIMIT_MAX": {
+      "description": "Maximum auth requests per window",
+      "value": "5"
+    },
+    "UPLOAD_PATH": {
+      "description": "File upload path",
+      "value": "/app/uploads"
+    },
+    "ENABLE_PROJECT_STATS": {
+      "description": "Enable project statistics",
+      "value": "true"
+    },
+    "ENABLE_PROJECT_EXPORT": {
+      "description": "Enable project export",
+      "value": "true"
+    },
+    "ENABLE_PROJECT_SHARING": {
+      "description": "Enable project sharing",
+      "value": "true"
+    },
+    "TRUST_PROXY": {
+      "description": "Trust proxy for Heroku",
+      "value": "1"
+    },
+    "DEBUG_MODE": {
+      "description": "Enable debug mode",
+      "value": "false"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini"
+    },
+    {
+      "plan": "heroku-redis:mini"
+    },
+    {
+      "plan": "papertrail:choklad"
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "npm run db:migrate && npm run db:seed"
+  }
+} 

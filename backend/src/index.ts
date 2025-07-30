@@ -66,31 +66,73 @@ cron.schedule('* * * * *', async () => {
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration for production
+// Environment-aware CORS configuration
+const getCorsOrigins = () => {
+  const env = process.env.NODE_ENV;
+  const corsOrigin = process.env.CORS_ORIGIN;
+  
+  // If CORS_ORIGIN is explicitly set, use it
+  if (corsOrigin) {
+    return corsOrigin.split(',').map(origin => origin.trim());
+  }
+  
+  // Production environment
+  if (env === 'production') {
+    return [
+      'https://minicde-production-589be4b0d52b.herokuapp.com',
+      'https://minicde-frontend-833302d6ab3c.herokuapp.com',
+      'https://qlda.hoanglong24.com',
+      'https://*.herokuapp.com',
+      'https://*.vercel.app',
+      'https://*.netlify.app',
+      'https://*.railway.app'
+    ];
+  }
+  
+  // Development environment
+  return [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://localhost',
+    'http://127.0.0.1',
+    // Allow all localhost ports for development
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/
+  ];
+};
+
+// CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CORS_ORIGIN 
-      ? [process.env.CORS_ORIGIN]
-      : [
-        'https://minicde-frontend-833302d6ab3c.herokuapp.com',
-        'https://minicde-production-589be4b0d52b.herokuapp.com',
-        'https://*.herokuapp.com', // Allow any Heroku subdomain
-        'https://*.vercel.app',    // Allow Vercel deployments
-        'https://*.netlify.app'    // Allow Netlify deployments
-      ]
-    : [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost',
-        'http://127.0.0.1',
-        'http://localhost:8080',
-        'http://127.0.0.1:8080',
-        'http://localhost:3001',
-        'http://127.0.0.1:3001',
-        // Allow all localhost for development
-        /^http:\/\/localhost:\d+$/,
-        /^http:\/\/127\.0\.0\.1:\d+$/
-      ],
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    const allowedOrigins = getCorsOrigins();
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin;
+      }
+      if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
@@ -100,15 +142,28 @@ const corsOptions = {
     'Accept',
     'Origin',
     'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
+    'Access-Control-Request-Headers',
+    'Cache-Control',
+    'Pragma'
   ],
-  exposedHeaders: ['Content-Length', 'X-Requested-With'],
-  maxAge: 86400 // 24 hours
+  exposedHeaders: [
+    'Content-Length', 
+    'X-Requested-With',
+    'X-Total-Count',
+    'X-Page-Count'
+  ],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
-// Initialize Socket.IO
+// Initialize Socket.IO with CORS
 const io = new Server(server, {
-  cors: corsOptions
+  cors: {
+    origin: getCorsOrigins(),
+    credentials: true,
+    methods: ['GET', 'POST']
+  }
 });
 
 // Set global io variable
