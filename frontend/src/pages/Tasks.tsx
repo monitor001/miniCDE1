@@ -1045,13 +1045,34 @@ const Tasks: React.FC = () => {
             </Col>
           </Row>
 
-          <Form.Item name="dueDate" label="Hạn hoàn thành">
-            <DatePicker 
-              style={{ width: '100%' }} 
-              format="DD/MM/YYYY"
-              placeholder="Chọn hạn hoàn thành"
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item 
+                name="startDate" 
+                label="Ngày bắt đầu"
+                rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu!' }]}
+              >
+                <DatePicker 
+                  style={{ width: '100%' }} 
+                  format="DD/MM/YYYY"
+                  placeholder="Chọn ngày bắt đầu"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item 
+                name="dueDate" 
+                label="Hạn hoàn thành"
+                rules={[{ required: true, message: 'Vui lòng chọn hạn hoàn thành!' }]}
+              >
+                <DatePicker 
+                  style={{ width: '100%' }} 
+                  format="DD/MM/YYYY"
+                  placeholder="Chọn hạn hoàn thành"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
 
