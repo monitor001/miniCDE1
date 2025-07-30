@@ -54,7 +54,7 @@ import {
 } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
 import io from 'socket.io-client';
-import debounce from 'lodash.debounce';
+import { debounce } from 'lodash';
 
 const { Option } = Select;
 const { Title, Text } = Typography;

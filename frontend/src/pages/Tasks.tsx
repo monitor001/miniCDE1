@@ -28,7 +28,7 @@ import axiosInstance from '../axiosConfig';
 import moment from 'moment';
 import { useOutletContext } from 'react-router-dom';
 import io from 'socket.io-client';
-import debounce from 'lodash.debounce';
+import { debounce } from 'lodash';
 import { 
   DragDropContext, 
   Droppable, 
