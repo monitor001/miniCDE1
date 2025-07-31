@@ -1,0 +1,6 @@
+backend/package.json
+backend/prisma/seed.js
+backend/src/index.ts
+backend/tsconfig.json
+frontend/src/axiosConfig.ts
+package.json

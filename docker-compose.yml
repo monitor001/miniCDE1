@@ -1,0 +1,195 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: minicde_postgres
+    environment:
+      POSTGRES_DB: minicde
+      POSTGRES_USER: minicde_user
+      POSTGRES_PASSWORD: minicde_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-setup.sh:/docker-entrypoint-initdb.d/postgres-setup.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - minicde_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minicde_user -d minicde"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: minicde_backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://minicde_user:minicde_password@postgres:5432/minicde
+      JWT_SECRET: minicde_jwt_secret_2024_secure_production_key
+      PORT: 3001
+      SOCKET_URL: http://localhost:3001
+      REDIS_URL: redis://redis:6379
+      # Project card features
+      ENABLE_PROJECT_STATS: true
+      ENABLE_PROJECT_EXPORT: true
+      ENABLE_PROJECT_SHARING: true
+      MAX_FILE_SIZE: 104857600
+      ALLOWED_FILE_TYPES: pdf,dwg,rvt,ifc,docx,xlsx,jpg,png
+      REQUEST_TIMEOUT: 30000
+      RESPONSE_TIMEOUT: 30000
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 1000
+      AUTH_RATE_LIMIT_MAX: 5
+      UPLOAD_PATH: /app/uploads
+      # API Configuration
+      REACT_APP_API_URL: http://localhost/api
+      REACT_APP_SOCKET_URL: http://localhost
+      REACT_APP_TITLE: Quản lý dự án
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - backend_logs:/app/logs
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - minicde_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: minicde_frontend
+    environment:
+      REACT_APP_API_URL: http://localhost/api
+      REACT_APP_SOCKET_URL: http://localhost
+      REACT_APP_ENABLE_PROJECT_CARDS: true
+      REACT_APP_ENABLE_EXPORT: true
+      REACT_APP_ENABLE_SHARING: true
+      REACT_APP_TITLE: Quản lý dự án
+      # Performance and feature flags
+      GENERATE_SOURCEMAP: false
+      INLINE_RUNTIME_CHUNK: false
+      SKIP_PREFLIGHT_CHECK: true
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - minicde_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
+  # Redis (for caching and sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: minicde_redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - minicde_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+        reservations:
+          memory: 128M
+          cpus: '0.05'
+
+  # Nginx Reverse Proxy (Optional - for production)
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: minicde_nginx_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - minicde_network
+    restart: unless-stopped
+    profiles:
+      - production
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+networks:
+  minicde_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

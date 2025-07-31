@@ -1,0 +1,10 @@
+[33m8cde109a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31mheroku/main[m[33m, [m[1;31mheroku/HEAD[m[33m, [m[1;31mheroku-frontend/main[m[33m)[m Optimize Gantt timeline: separate assignee/priority info, unified colors, date format, column widths
+[33m4c100643[m Optimize Gantt timeline display: clear task names with assignee and priority info
+[33m3c535b72[m Enhance Gantt timeline with improved styling, task details, and responsive layout
+[33m67ca8e3a[m Enhance Gantt timeline with project structure and improved list display
+[33m168f6c46[m Fix task edit form data binding and enhance Gantt timeline with project structure
+[33mb63aff18[m Fix task display issues: assignee display, edit form, and comment functionality
+[33m51e3eed2[m Fix backend task controller for startDate and category, improve Gantt timeline styling
+[33m36e98aa4[m Add startDate and category fields to task form, implement Gantt timeline view, and remove auxiliary statistics table
+[33mc85f0d10[m Fix JavaScript error: Add null checks for getFieldValue to prevent trim() error
+[33m023cffbd[m Remove TasksNew.tsx and clean up imports - keep only the complete Tasks.tsx

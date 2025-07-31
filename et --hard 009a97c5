@@ -1,0 +1,20 @@
+[33meae033c8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Remove console.log statements to optimize performance and reduce memory usage
+[33m009a97c5[m[33m ([m[1;31mheroku-frontend/main[m[33m, [m[1;31mheroku-frontend/HEAD[m[33m)[m Fix Procfile for frontend app - use npm start instead of cd backend
+[33m8ec86ec4[m Fix Procfile for Heroku deployment - remove build.sh script
+[33m2a7bec03[m fix: remove category from task create, fix assigneeId emit
+[33me0c2965a[m chore: build both frontend and backend before start (monorepo Heroku fix)
+[33m545d3c9f[m fix: enable comment submit button with Form.Item shouldUpdate
+[33mba5fcdd8[m chore: log API /tasks/:id response for comment debug
+[33m2412d939[m fix: remove all sample Gantt task declarations from JSX, only in function body
+[33ma9411ec4[m fix: fetch comments for task from /tasks/:id endpoint
+[33m3d90515d[m fix: always use string for Gantt task fields
+[33mbe3b83d2[m Fix: validate Gantt data to prevent crash
+[33ma99c8f85[m Cap nhat
+[33m630c5a4c[m Hoàn thiện giao diện Gantt, inline expand/collapse, tooltip, đồng nhất màu, sửa bình luận
+[33m92f2de74[m Deploy frontend to Heroku
+[33m8e7c84ba[m Fix: Enable comment functionality for tasks - Remove disabled state from comment buttons
+[33m7a6569cb[m Force rebuild frontend with latest Gantt timeline optimizations
+[33m8cde109a[m Optimize Gantt timeline: separate assignee/priority info, unified colors, date format, column widths
+[33m4c100643[m Optimize Gantt timeline display: clear task names with assignee and priority info
+[33m3c535b72[m Enhance Gantt timeline with improved styling, task details, and responsive layout
+[33m67ca8e3a[m Enhance Gantt timeline with project structure and improved list display
